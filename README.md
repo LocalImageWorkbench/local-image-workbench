@@ -16,6 +16,15 @@ Windows 本地出图工作台，连接 Ollama 生成/修改提示词，并连接
 - 内置工作流默认需要与 `config.json` 中 `model_files` 匹配的模型文件名；换模型需要改配置。
 - 便携版首次启动仍需要选择/确认 ComfyUI 路径、模型和 LLM。
 
+## 宣传片
+
+B 站演示视频：
+
+https://www.bilibili.com/video/BV12kyjz9EKA/
+
+- 16:9 主封面：https://github.com/LocalImageWorkbench/local-image-workbench/releases/download/v0.2.0-beta/cover-16x9-local-image-workbench.png
+- 4:3 个人空间封面：https://github.com/LocalImageWorkbench/local-image-workbench/releases/download/v0.2.0-beta/cover-4x3-local-image-workbench.png
+
 ### 发布硬化
 
 - 生成结束/失败后自动刷新 LLM 与 ComfyUI 状态。
