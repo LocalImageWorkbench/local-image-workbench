@@ -15,7 +15,7 @@
 
 建议准备：
 
-- `本地出图工作台-0.2.0-beta-便携版.zip`：GitHub 主发布，约 16.8 MB
+- `local-image-workbench-0.2.0-beta-portable.zip`：GitHub 主发布，约 16.8 MB
 - `本地出图工作台-0.2.0-runtime.zip`：夸克离线运行包
 - `本地出图工作台-0.2.0-models-sfw.zip`：夸克 SFW 选配
 - `本地出图工作台-0.2.0-models-nsfw.zip`：夸克 NSFW 选配，单独链接
@@ -32,7 +32,7 @@
 在 PowerShell 中执行：
 
 ```powershell
-Get-FileHash .\本地出图工作台-0.2.0-beta-便携版.zip -Algorithm SHA256
+Get-FileHash .\local-image-workbench-0.2.0-beta-portable.zip -Algorithm SHA256
 ```
 
 把结果写进 `SHA256SUMS.txt`。用户下载后可以核对。
@@ -52,7 +52,7 @@ Get-FileHash .\本地出图工作台-0.2.0-beta-便携版.zip -Algorithm SHA256
 
 - Tag：`v0.2.0-beta`
 - 标题：`本地出图工作台 0.2.0-beta`
-- 上传 `本地出图工作台-0.2.0-beta-便携版.zip`
+- 上传 `local-image-workbench-0.2.0-beta-portable.zip`
 - 上传 `SHA256SUMS.txt`
 - 不要上传模型权重
 
@@ -65,7 +65,7 @@ Windows 本地出图工作台：Ollama 生成提示词，ComfyUI 出图；自带
 
 ## 下载
 
-- 便携版：本地出图工作台-0.2.0-beta-便携版.zip（约 16.8 MB）
+- 便携版：local-image-workbench-0.2.0-beta-portable.zip（约 16.8 MB）
 - 不要求另装 Python
 - 仍需要 ComfyUI、Ollama 和模型文件
 
@@ -182,7 +182,7 @@ GitHub 访问不便时，可使用夸克补充发行包：
 PowerShell 中执行：
 
 ```powershell
-Get-FileHash .\本地出图工作台-0.2.0-beta-便携版.zip -Algorithm SHA256
+Get-FileHash .\local-image-workbench-0.2.0-beta-portable.zip -Algorithm SHA256
 ```
 
 和发布页的 SHA256 对比。不一致就重新下载，不要运行。
@@ -230,5 +230,6 @@ Get-FileHash .\本地出图工作台-0.2.0-beta-便携版.zip -Algorithm SHA256
 - [ ] 干净 Windows 机器测试通过
 - [ ] 发布页写明“夸克是补充发行，不是镜像”
 - [ ] 发布页写明 DSH 能做什么、不能保证什么
+
 
 
