@@ -91,7 +91,10 @@ https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM
 SFW 模型清单：https://pan.quark.cn/s/e04b7874df45?pwd=YLU8
 提取码：YLU8
 
-NSFW 清单：待补，单独链接。
+NSFW 模型清单（仅 18+）：https://pan.quark.cn/s/0cf0359df13f?pwd=HdzU
+提取码：HdzU
+
+NSFW 清单不含模型权重，不与主包混放。
 
 夸克是补充发行渠道，不是 GitHub 镜像；可能包含 GitHub 没有的离线运行包或选配模型。请以包内 SHA256 和说明为准。
 
@@ -240,6 +243,7 @@ Get-FileHash .\local-image-workbench-0.2.0-beta-portable.zip -Algorithm SHA256
 - [ ] 干净 Windows 机器测试通过
 - [ ] 发布页写明“夸克是补充发行，不是镜像”
 - [ ] 发布页写明 DSH 能做什么、不能保证什么
+
 
 
 

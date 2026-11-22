@@ -50,7 +50,10 @@ https://github.com/wangzimu2007/local-image-workbench/releases/tag/v0.2.0-beta
 SFW 模型清单：https://pan.quark.cn/s/e04b7874df45?pwd=YLU8
 提取码：YLU8
 
-NSFW 清单：待补，单独链接。
+NSFW 模型清单（仅 18+）：https://pan.quark.cn/s/0cf0359df13f?pwd=HdzU
+提取码：HdzU
+
+NSFW 清单不含模型权重，单独分享。
 
 ## 标签
 
@@ -81,5 +84,6 @@ NSFW 清单：待补，单独链接。
 成片、封面、字幕、文案已完成。
 
 尚未上传 B 站：需要你的 B 站账号登录/投稿权限，我没有代登录。你可以直接上传这四个文件。
+
 
 

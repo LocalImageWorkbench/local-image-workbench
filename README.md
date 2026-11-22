@@ -149,6 +149,7 @@ python -m unittest discover -s tests -v
 
 - 便携版：https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM 提取码：e4vM
 - SFW 模型清单：https://pan.quark.cn/s/e04b7874df45?pwd=YLU8 提取码：YLU8
-- NSFW 清单：待补，单独链接
+- NSFW 模型清单（仅 18+）：https://pan.quark.cn/s/0cf0359df13f?pwd=HdzU 提取码：HdzU
 
-夸克是补充发行渠道，不是 GitHub 镜像。当前提供便携版和 SFW 模型清单；不含模型权重。
+夸克是补充发行渠道，不是 GitHub 镜像。当前提供便携版、SFW 清单和 NSFW 清单；均不含模型权重，NSFW 仅限 18+。
+
