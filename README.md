@@ -149,7 +149,8 @@ python -m unittest discover -s tests -v
 
 - 链接：https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM
 - 提取码：e4vM
-- 文件：`local-image-workbench-0.2.0-beta-portable.zip`
+- 文件：`本地出图工作台-0.2.0-beta-便携版.zip`
 
-夸克是补充发行渠道，不是 GitHub 镜像。当前只上传播便携版；SFW/NSFW 模型清单尚未上传，不包含模型权重。
+夸克是补充发行渠道，不是 GitHub 镜像。当前只上传便携版；SFW/NSFW 模型清单尚未上传，不包含模型权重。
+
 
