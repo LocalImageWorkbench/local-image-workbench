@@ -1,6 +1,6 @@
 {
   "version": "0.2.0-beta",
-  "url": "https://github.com/wangzimu2007/local-image-workbench/releases/tag/v0.2.0-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.2.0-beta",
   "notes": "首次公开发布：便携版、C 站教程、角色搜索、模型管理和首次向导。",
   "requires": {
     "windows": "Windows 10/11",
@@ -10,6 +10,6 @@
   },
   "assets": {
     "portable_zip": "local-image-workbench-0.2.0-beta-portable.zip",
-    "sha256": "2f8830d4fbd38a25a5755e79838d7a0bd1692ca88fa816d517e3d4cd97e8acaa"
+    "sha256": "fe4ac17de03abec3a0d4466d770b9a40bee5eb0cdfae971e89b45d0df044592d"
   }
 }

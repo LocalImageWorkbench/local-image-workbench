@@ -24,3 +24,4 @@ docs/*.jpg
 docs/*.jpeg
 docs/LOCAL-SETUP.md
 .github/workflows/
+promo/

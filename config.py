@@ -53,7 +53,7 @@ DEFAULTS = {
     "comfy_workflows_dir": "",
     "checkpoint_dir": "",
     "civitai_api_key": "",
-    "update_manifest_url": "https://raw.githubusercontent.com/wangzimu2007/local-image-workbench/main/update.json",
+    "update_manifest_url": "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json",
     "lora_roots": [],
     "output_dir": str(default_output_dir()),
     "skills_dir": str(resource_path("skills")),

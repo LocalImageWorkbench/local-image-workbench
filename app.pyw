@@ -42,7 +42,7 @@ try:
 except Exception:
     APP_VERSION = "0.2.0-beta"
 DEFAULT_UPDATE_MANIFEST = (
-    "https://raw.githubusercontent.com/wangzimu2007/local-image-workbench/main/update.json"
+    "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
 DATA_DIR = Path(CFG.data_dir)
 DATA_DIR.mkdir(parents=True, exist_ok=True)

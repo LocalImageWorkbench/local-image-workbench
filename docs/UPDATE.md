@@ -5,14 +5,14 @@
 侧栏“检查更新”会读取：
 
 - 配置项 `update_manifest_url`
-- 默认值：`https://raw.githubusercontent.com/wangzimu2007/local-image-workbench/main/update.json`
+- 默认值：`https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json`
 
 清单格式：
 
 ```json
 {
   "version": "0.2.1-beta",
-  "url": "https://github.com/wangzimu2007/local-image-workbench/releases/tag/v0.2.1-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.2.1-beta",
   "notes": "修复内容",
   "assets": {
     "portable_zip": "PromptWorkbench-0.2.1-portable.zip",
