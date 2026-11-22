@@ -81,22 +81,12 @@ DSH 能帮你下载、校验、解压和检查环境；是否能自动装好 Com
 
 GitHub 访问不便时，可使用夸克补充发行包：
 
-https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM
+夸克整合发布包（便携版 + SFW/NSFW 清单）：
+https://pan.quark.cn/s/c9c289247c6d?pwd=NXHp
+提取码：NXHp
+SHA256：b627c5b6cc65ba5931f56c8fcc40524cc38873097000371dafd00fefd32ee78e
 
-提取码：e4vM
-
-便携版：https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM
-提取码：e4vM
-
-SFW 模型清单：https://pan.quark.cn/s/e04b7874df45?pwd=YLU8
-提取码：YLU8
-
-NSFW 模型清单（仅 18+）：https://pan.quark.cn/s/0cf0359df13f?pwd=HdzU
-提取码：HdzU
-
-NSFW 清单不含模型权重，不与主包混放。
-
-夸克是补充发行渠道，不是 GitHub 镜像；可能包含 GitHub 没有的离线运行包或选配模型。请以包内 SHA256 和说明为准。
+说明：旧便携包链接已不再作为主下载；整合包不含模型权重，NSFW 仅限 18+。
 
 ## 说明
 
