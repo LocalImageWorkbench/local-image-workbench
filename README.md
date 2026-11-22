@@ -118,7 +118,7 @@ Windows 本地出图工作台，连接 Ollama 生成/修改提示词，并连接
 - 内置工作流绑定固定模型文件名，当前通过 `config.json` 的 `model_files` 修改。
 - 复杂 UI 工作流含自定义节点/子图时，需要先在 ComfyUI 导出 API JSON。
 - 没有自动安装 ComfyUI/Ollama/模型的向导。
-- 没有安装包、代码签名、自动更新。
+- 没有安装器/代码签名；已提供便携版和更新提示，不做自动替换。
 - 没有完整自动化测试；当前只有纯模块测试。
 - 公开仓库不要提交 `docs` 中的露骨测试图、`data` 中的个人历史或任何模型文件。
 
@@ -152,3 +152,4 @@ python -m unittest discover -s tests -v
 - 文件：`local-image-workbench-0.2.0-beta-portable.zip`
 
 夸克是补充发行渠道，不是 GitHub 镜像。当前只上传播便携版；SFW/NSFW 模型清单尚未上传，不包含模型权重。
+
