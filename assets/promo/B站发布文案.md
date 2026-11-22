@@ -42,10 +42,15 @@ https://github.com/wangzimu2007/local-image-workbench/releases/tag/v0.2.0-beta
 
 没有环境？把 Release 链接复制给 DSH，让它下载、校验、解压并检查环境。
 
-夸克补充下载（仅便携版）：
-https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM
+夸克补充下载：
+
+便携版：https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM
 提取码：e4vM
-```
+
+SFW 模型清单：https://pan.quark.cn/s/e04b7874df45?pwd=YLU8
+提取码：YLU8
+
+NSFW 清单：待补，单独链接。
 
 ## 标签
 
