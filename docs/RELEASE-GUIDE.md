@@ -81,7 +81,11 @@ DSH 能帮你下载、校验、解压和检查环境；是否能自动装好 Com
 
 GitHub 访问不便时，可使用夸克补充发行包：
 
-[夸克链接待填]
+https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM
+
+提取码：e4vM
+
+当前仅便携版；SFW/NSFW 清单尚未上传。
 
 夸克是补充发行渠道，不是 GitHub 镜像；可能包含 GitHub 没有的离线运行包或选配模型。请以包内 SHA256 和说明为准。
 
@@ -230,6 +234,7 @@ Get-FileHash .\local-image-workbench-0.2.0-beta-portable.zip -Algorithm SHA256
 - [ ] 干净 Windows 机器测试通过
 - [ ] 发布页写明“夸克是补充发行，不是镜像”
 - [ ] 发布页写明 DSH 能做什么、不能保证什么
+
 
 
 

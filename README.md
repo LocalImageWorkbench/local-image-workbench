@@ -144,3 +144,11 @@ python -m unittest discover -s tests -v
 代码使用 MIT License。随包 `skills/` 和第三方工作流/模型的授权需要单独核对，见 `THIRD_PARTY_NOTICES.md`。
 
 
+
+## 国内补充下载（仅便携版）
+
+- 链接：https://pan.quark.cn/s/3f2983d201eb?pwd=e4vM
+- 提取码：e4vM
+- 文件：`local-image-workbench-0.2.0-beta-portable.zip`
+
+夸克是补充发行渠道，不是 GitHub 镜像。当前只上传播便携版；SFW/NSFW 模型清单尚未上传，不包含模型权重。
