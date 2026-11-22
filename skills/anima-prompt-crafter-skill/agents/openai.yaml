@@ -1,0 +1,4 @@
+interface:
+  display_name: "Anima Prompt Crafter"
+  short_description: "把任意输入转换为 Anima 友好的超详细正反向提示词"
+  default_prompt: "Use $anima-prompt-crafter to convert my idea into a detailed Anima prompt for ComfyUI or RunningHub."

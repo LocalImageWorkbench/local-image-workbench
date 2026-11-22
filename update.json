@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0-beta",
+  "url": "https://github.com/wangzimu2007/local-image-workbench/releases/tag/v0.2.0-beta",
+  "notes": "首次公开发布：便携版、C 站教程、角色搜索、模型管理和首次向导。",
+  "requires": {
+    "windows": "Windows 10/11",
+    "python": "便携版已内置；源码版 3.10+",
+    "comfyui": "可访问 /system_stats",
+    "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
+  },
+  "assets": {
+    "portable_zip": "本地出图工作台-0.2.0-beta-便携版.zip",
+    "sha256": "2f8830d4fbd38a25a5755e79838d7a0bd1692ca88fa816d517e3d4cd97e8acaa"
+  }
+}
