@@ -9,7 +9,7 @@
     "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
   },
   "assets": {
-    "portable_zip": "本地出图工作台-0.2.0-beta-便携版.zip",
+    "portable_zip": "local-image-workbench-0.2.0-beta-portable.zip",
     "sha256": "2f8830d4fbd38a25a5755e79838d7a0bd1692ca88fa816d517e3d4cd97e8acaa"
   }
 }
