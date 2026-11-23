@@ -2402,6 +2402,7 @@ class PromptWorkbench:
         self.beginner_llm_status.configure(text="LLM 检查中…", fg=COLORS["muted"])
         self.beginner_comfy_status.configure(text="ComfyUI 检查中…", fg=COLORS["muted"])
         self._refresh_beginner_model_status()
+        close_after = bool(self.gen_close_var.get())
 
         def worker():
             llm_text, llm_ok = "LLM ✕", False
@@ -2417,7 +2418,7 @@ class PromptWorkbench:
                     comfy_ok = r.status < 500
                     comfy_text = "ComfyUI ✓" if comfy_ok else f"ComfyUI HTTP {r.status}"
             except Exception:
-                if self.gen_close_var.get():
+                if close_after:
                     comfy_text = "ComfyUI ○ 按需启动"
                 else:
                     comfy_text = "ComfyUI ✕ 未启动"
@@ -2449,6 +2450,7 @@ class PromptWorkbench:
         self.beginner_prepare_btn.configure(state="disabled", text="准备中…")
         self.beginner_comfy_status.configure(text="ComfyUI 准备中…", fg=COLORS["muted"])
         self.beginner_llm_status.configure(text="LLM 检查中…", fg=COLORS["muted"])
+        close_after = bool(self.gen_close_var.get())
 
         def worker():
             comfy_error = ""
@@ -2470,7 +2472,7 @@ class PromptWorkbench:
                     comfy_ok = r.status < 500
                     comfy_text = "ComfyUI ✓" if comfy_ok else f"ComfyUI HTTP {r.status}"
             except Exception:
-                if self.gen_close_var.get():
+                if close_after:
                     comfy_text = "ComfyUI ○ 按需启动"
                 else:
                     comfy_text = "ComfyUI ✕ " + (comfy_error[:50] if comfy_error else "未启动")
