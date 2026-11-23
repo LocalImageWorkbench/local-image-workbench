@@ -7,7 +7,7 @@
 - 设置页拆分为环境与路径、生成行为、更新、引导四个 Tab。
 - Seed 改为随机/固定开关，显示本次实际 Seed，可固定并写入历史。
 - 快捷键 Ctrl+S / Ctrl+L / Ctrl+F / Ctrl+Z；清空提示词可撤销。
-- 主按钮层级调整，“重新写提示词/改写提示词/推荐 LoRA”降为次操作。
+- 随机提示词新增“自动匹配”开关：按题材自动选择风格和底模，默认开启并保存状态。\n- 主按钮层级调整，“重新写提示词/改写提示词/推荐 LoRA”降为次操作。
 - 更新日志和使用说明改为软件内阅读，不依赖 Markdown 关联。
 - 0.4 预览包附加《使用说明.md》。
 
@@ -86,6 +86,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 
