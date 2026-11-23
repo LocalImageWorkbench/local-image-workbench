@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.2-beta
+
+- 角色主题新增道具、天气、季节、配色、构图组件，SFW/NSFW 分库。
+- 角色主题支持“画幅”选择，竖图/方图/横图会真正写入宽高。
+- 角色 LoRA 支持服装套组：一行一套，随机该角色时优先使用专属套组。
+- LoRA 角色标记增加通用/仅SFW/仅NSFW 用途。
+- 角色主题组合最多仍为角色 + 姿势 + 风格三个 LoRA，其他组件走提示词。
+
+
 ## 0.5.1-beta
 
 - LoRA 增加角色/姿势/风格/其他标记，标记保存在 `lora-roles.json`。
@@ -104,6 +113,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 

@@ -52,7 +52,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.1-beta"
+    APP_VERSION = "0.5.2-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -2301,8 +2301,10 @@ class PromptWorkbench:
             rec_full = self.lora_role_store.record_for(rec["item"])
             rating = rec_full.get("rating", "both")
             counts[role] = counts.get(role, 0) + 1
+            outfits = rec_full.get("outfits") or []
+            outfit_note = f"｜套组{len(outfits)}" if outfits else ""
             listbox.insert("end", f"[{lroles.ROLE_LABELS[role]}/{lroles.RATING_LABELS.get(rating, '通用')}] "
-                                    f"{rec['name']}｜{rec['base']}")
+                                    f"{rec['name']}｜{rec['base']}{outfit_note}")
         counts_label.configure(
             text=f"角色 {counts['character']} · 姿势 {counts['pose']} · 风格 {counts['style']} · 其他 {counts['other']}")
         if selection is not None and records:
@@ -2323,7 +2325,7 @@ class PromptWorkbench:
         self.lora_theme_dialog = top
         top.title("角色主题随机")
         top.configure(bg=COLORS["bg"])
-        center_dialog_over(self.root, top, 900, 650)
+        center_dialog_over(self.root, top, 920, 720)
         top.transient(self.root)
         sfw_now = self.mode.get() == "SFW"
         tk.Label(top, text="角色主题随机", bg=COLORS["bg"], fg=COLORS["text"],
@@ -2372,6 +2374,10 @@ class PromptWorkbench:
         tk.Label(rating_row, text="当前模式只抽“通用”和对应模式；不会 SFW/NSFW 混用。",
                  bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 8)).pack(
                      side="left", padx=(8, 0))
+        tk.Button(rating_row, text="角色服装套组", command=lambda: self._theme_edit_outfits(
+            records, theme_list, counts_label, top),
+            bg=COLORS["panel"], fg=COLORS["accent2"], relief="flat", bd=0,
+            padx=8, pady=3, cursor="hand2").pack(side="right")
 
         opts = tk.Frame(top, bg=COLORS["bg"])
         opts.pack(fill="x", padx=20, pady=(10, 0))
@@ -2400,15 +2406,30 @@ class PromptWorkbench:
         comp_row = tk.Frame(top, bg=COLORS["bg"])
         comp_row.pack(fill="x", padx=20, pady=(7, 0))
         tk.Label(comp_row, text=f"随机{'SFW' if sfw_now else 'NSFW'}组件", bg=COLORS["bg"],
-                 fg=COLORS["accent2"], font=("Microsoft YaHei UI", 9, "bold")).pack(side="left")
+                 fg=COLORS["accent2"], font=("Microsoft YaHei UI", 9, "bold")).pack(side="left",
+                                                                                    anchor="n")
+        comp_grid = tk.Frame(comp_row, bg=COLORS["bg"])
+        comp_grid.pack(side="left", padx=(6, 0))
         comp_vars = {}
         defaults = {"服装", "场景", "光线"}
-        for key in tcomponents.keys(sfw_now):
+        for idx, key in enumerate(tcomponents.keys(sfw_now)):
             var = tk.BooleanVar(value=key in defaults)
             comp_vars[key] = var
-            tk.Checkbutton(comp_row, text=key, variable=var, bg=COLORS["bg"], fg=COLORS["text"],
+            tk.Checkbutton(comp_grid, text=key, variable=var, bg=COLORS["bg"], fg=COLORS["text"],
                            activebackground=COLORS["bg"], selectcolor=COLORS["input"],
-                           font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(6, 0))
+                           font=("Microsoft YaHei UI", 8)).grid(
+                               row=idx // 6, column=idx % 6, sticky="w", padx=(0, 8), pady=1)
+
+        ratio_row = tk.Frame(top, bg=COLORS["bg"])
+        ratio_row.pack(fill="x", padx=20, pady=(6, 0))
+        tk.Label(ratio_row, text="画幅", bg=COLORS["bg"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        ratio_var = tk.StringVar(value="不改变")
+        ttk.Combobox(ratio_row, textvariable=ratio_var, width=7, state="readonly",
+                     values=("不改变", "竖图", "方图", "横图"),
+                     font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(4, 8))
+        tk.Label(ratio_row, text="选择后真正写入宽高；不改变则沿用当前设置",
+                 bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 8)).pack(side="left")
 
         btns = tk.Frame(top, bg=COLORS["bg"])
         btns.pack(fill="x", padx=20, pady=(12, 14))
@@ -2416,7 +2437,7 @@ class PromptWorkbench:
                   command=lambda: self._apply_lora_theme(
                       records, pose_var.get(), style_var.get(),
                       float(pose_strength.get()), float(style_strength.get()),
-                      [k for k, v in comp_vars.items() if v.get()], sfw_now, top),
+                      [k for k, v in comp_vars.items() if v.get()], ratio_var.get(), sfw_now, top),
                   bg=COLORS["accent"], fg="#fff", relief="flat", bd=0,
                   padx=16, pady=6, font=("Microsoft YaHei UI", 10, "bold"), cursor="hand2").pack(side="right")
         tk.Button(btns, text="关闭", command=top.destroy, bg=COLORS["card2"], fg=COLORS["text"],
@@ -2439,8 +2460,48 @@ class PromptWorkbench:
         self.lora_role_store.set_rating(rec["item"], rating)
         self._theme_refresh(listbox, records, counts_label, sel[0])
 
+    def _theme_edit_outfits(self, records, listbox, counts_label, parent):
+        sel = listbox.curselection()
+        if not sel:
+            messagebox.showinfo(APP_NAME, "先选一个角色 LoRA。", parent=parent)
+            return
+        rec = records[sel[0]]
+        full = self.lora_role_store.record_for(rec["item"])
+        if full.get("role") != "character":
+            messagebox.showinfo(APP_NAME, "先把该 LoRA 标为“角色”，再编辑服装套组。", parent=parent)
+            return
+        top = tk.Toplevel(parent)
+        top.title("角色服装套组")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(parent, top, 680, 440)
+        top.transient(parent)
+        tk.Label(top, text=f"角色：{rec['name']}", bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 14, "bold")).pack(anchor="w", padx=18, pady=(12, 2))
+        tk.Label(top, text="一行一套服装；随机到该角色时优先从套组里选一套。留空则用通用服装组件。",
+                 bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(
+                     anchor="w", padx=18, pady=(0, 6))
+        box = ScrolledText(top, wrap="word", height=12, bg=COLORS["input"], fg=COLORS["text"],
+                           insertbackground=COLORS["text"], relief="flat", bd=0,
+                           font=("Microsoft YaHei UI", 10), padx=10, pady=8)
+        box.pack(fill="both", expand=True, padx=18)
+        box.insert("1.0", "\n".join(full.get("outfits") or []))
+
+        def save():
+            outfits = [x.strip() for x in box.get("1.0", "end").splitlines() if x.strip()]
+            self.lora_role_store.set_outfits(rec["item"], outfits)
+            self._theme_refresh(listbox, records, counts_label, sel[0])
+            self.status_var.set(f"已保存 {len(outfits)} 套角色服装：{rec['name']}")
+            top.destroy()
+
+        row = tk.Frame(top, bg=COLORS["bg"])
+        row.pack(fill="x", padx=18, pady=10)
+        tk.Button(row, text="保存", command=save, bg=COLORS["accent"], fg="#fff",
+                  relief="flat", bd=0, padx=14, pady=5, cursor="hand2").pack(side="right")
+        tk.Button(row, text="取消", command=top.destroy, bg=COLORS["card2"], fg=COLORS["text"],
+                  relief="flat", bd=0, padx=12, pady=5, cursor="hand2").pack(side="right", padx=(0, 6))
+
     def _apply_lora_theme(self, records, pose, style, pose_strength, style_strength,
-                          component_keys, sfw, top):
+                          component_keys, ratio, sfw, top):
         items = []
         for rec in records:
             base = rec["base"]
@@ -2482,9 +2543,16 @@ class PromptWorkbench:
         self._refresh_lora_selected()
         triggers = [r.get("trigger", "") for r in (picked["character"], picked.get("pose"), picked.get("style")) if r]
         components = tcomponents.pick(sfw, component_keys)
+        outfits = picked["character"].get("outfits") or []
+        if outfits and "服装" in components:
+            components["服装"] = random.choice(outfits)
         component_text = tcomponents.compose(components)
         if component_text:
             triggers.append(component_text)
+        if ratio in BEGINNER_RATIOS:
+            width, height = BEGINNER_RATIOS[ratio]
+            self.advanced_width_var.set(str(width))
+            self.advanced_height_var.set(str(height))
         self._prepend_theme_triggers(triggers)
         names = " + ".join(x["name"] for x in selected)
         mode_text = "SFW" if sfw else "NSFW"
@@ -7579,6 +7647,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

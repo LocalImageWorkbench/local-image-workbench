@@ -21,6 +21,11 @@ class ThemeComponentTests(unittest.TestCase):
         self.assertIn("服装：黑色长风衣", text)
         self.assertIn("场景：雨夜街头", text)
 
+    def test_extended_components(self):
+        out = tc.pick(True, ["道具", "天气", "季节", "配色", "构图"])
+        self.assertEqual(set(out), {"道具", "天气", "季节", "配色", "构图"})
+        self.assertIn("构图", tc.compose(out))
+
 
 if __name__ == "__main__":
     unittest.main()

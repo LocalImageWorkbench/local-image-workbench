@@ -71,8 +71,10 @@ class RoleStore:
         rec = self._data.get(key, {})
         role = rec.get("role") if rec.get("role") in ROLES else guess_role(item)
         rating = rec.get("rating") if rec.get("rating") in RATINGS else "both"
+        outfits = rec.get("outfits") if isinstance(rec.get("outfits"), list) else []
         return {"role": role, "rating": rating, "path": str(item.get("path", "")),
-                "base": item.get("base", ""), "trigger": item.get("trigger", "")}
+                "base": item.get("base", ""), "trigger": item.get("trigger", ""),
+                "outfits": [str(x) for x in outfits if str(x).strip()]}
 
     def set_role(self, item, role):
         if role not in ROLES:
@@ -90,6 +92,19 @@ class RoleStore:
         key = self.key(item.get("path", ""))
         rec = self._data.get(key, {})
         rec.update({"rating": rating, "path": str(item.get("path", "")),
+                    "base": item.get("base", ""), "trigger": item.get("trigger", "")})
+        self._data[key] = rec
+        self.save()
+
+    def set_outfits(self, item, outfits):
+        key = self.key(item.get("path", ""))
+        rec = self._data.get(key, {})
+        clean = []
+        for value in outfits:
+            value = str(value).strip()
+            if value and value not in clean:
+                clean.append(value)
+        rec.update({"outfits": clean[:30], "path": str(item.get("path", "")),
                     "base": item.get("base", ""), "trigger": item.get("trigger", "")})
         self._data[key] = rec
         self.save()
