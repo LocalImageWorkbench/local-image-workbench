@@ -51,6 +51,20 @@ class LoraRoleTests(unittest.TestCase):
             s = lr.RoleStore(Path(d) / "roles.json")
             self.assertIsNone(lr.choose_theme([item("style_a")], s, base="MOSS"))
 
+    def test_rating_filter(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = lr.RoleStore(Path(d) / "roles.json")
+            a = item("kafka")
+            b = item("moss_char", base="MOSS")
+            s.set_role(a, "character")
+            s.set_role(b, "character")
+            s.set_rating(a, "sfw")
+            s.set_rating(b, "nsfw")
+            sfw = lr.choose_theme([a, b], s, sfw=True)
+            nsfw = lr.choose_theme([a, b], s, sfw=False)
+            self.assertEqual(sfw["character"]["path"], a["path"])
+            self.assertEqual(nsfw["character"]["path"], b["path"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,8 @@ from pathlib import Path
 
 ROLES = ("character", "pose", "style", "other")
 ROLE_LABELS = {"character": "角色", "pose": "姿势", "style": "风格", "other": "其他"}
+RATINGS = ("both", "sfw", "nsfw")
+RATING_LABELS = {"both": "通用", "sfw": "仅SFW", "nsfw": "仅NSFW"}
 GENERIC = {
     "style", "pose", "detail", "skin", "texture", "light", "lighting", "realism",
     "slider", "frame", "expression", "clothing", "outfit", "effect", "anime",
@@ -68,7 +70,8 @@ class RoleStore:
         key = self.key(item.get("path", ""))
         rec = self._data.get(key, {})
         role = rec.get("role") if rec.get("role") in ROLES else guess_role(item)
-        return {"role": role, "path": str(item.get("path", "")),
+        rating = rec.get("rating") if rec.get("rating") in RATINGS else "both"
+        return {"role": role, "rating": rating, "path": str(item.get("path", "")),
                 "base": item.get("base", ""), "trigger": item.get("trigger", "")}
 
     def set_role(self, item, role):
@@ -77,6 +80,16 @@ class RoleStore:
         key = self.key(item.get("path", ""))
         rec = self._data.get(key, {})
         rec.update({"role": role, "path": str(item.get("path", "")),
+                    "base": item.get("base", ""), "trigger": item.get("trigger", "")})
+        self._data[key] = rec
+        self.save()
+
+    def set_rating(self, item, rating):
+        if rating not in RATINGS:
+            return
+        key = self.key(item.get("path", ""))
+        rec = self._data.get(key, {})
+        rec.update({"rating": rating, "path": str(item.get("path", "")),
                     "base": item.get("base", ""), "trigger": item.get("trigger", "")})
         self._data[key] = rec
         self.save()
@@ -92,12 +105,15 @@ def same_base(items, base):
     return [x for x in items if str(x.get("base", "")) == str(base)]
 
 
-def choose_theme(items, store, base=None, pose=True, style=True, rng=None):
+def choose_theme(items, store, base=None, pose=True, style=True, sfw=True, rng=None):
     """Pick one character, then same-base pose/style from the supplied LoRAs."""
     rng = rng or random
     records = []
     for item in items:
         rec = store.record_for(item)
+        want = "sfw" if sfw else "nsfw"
+        if rec.get("rating") not in ("both", want):
+            continue
         rec["item"] = item
         records.append(rec)
     chars = [r for r in records if r["role"] == "character"]

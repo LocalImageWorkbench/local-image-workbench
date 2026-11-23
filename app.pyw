@@ -37,6 +37,7 @@ import workflow_import as wfimport
 import core_state as core
 import random_library as rlibrary
 import lora_roles as lroles
+import theme_components as tcomponents
 import lora_match
 import config as appconfig
 import llm_client
@@ -2297,8 +2298,11 @@ class PromptWorkbench:
         counts = {"character": 0, "pose": 0, "style": 0, "other": 0}
         for rec in records:
             role = self.lora_role_store.role_for(rec["item"])
+            rec_full = self.lora_role_store.record_for(rec["item"])
+            rating = rec_full.get("rating", "both")
             counts[role] = counts.get(role, 0) + 1
-            listbox.insert("end", f"[{lroles.ROLE_LABELS[role]}] {rec['name']}｜{rec['base']}")
+            listbox.insert("end", f"[{lroles.ROLE_LABELS[role]}/{lroles.RATING_LABELS.get(rating, '通用')}] "
+                                    f"{rec['name']}｜{rec['base']}")
         counts_label.configure(
             text=f"角色 {counts['character']} · 姿势 {counts['pose']} · 风格 {counts['style']} · 其他 {counts['other']}")
         if selection is not None and records:
@@ -2321,9 +2325,11 @@ class PromptWorkbench:
         top.configure(bg=COLORS["bg"])
         center_dialog_over(self.root, top, 900, 650)
         top.transient(self.root)
+        sfw_now = self.mode.get() == "SFW"
         tk.Label(top, text="角色主题随机", bg=COLORS["bg"], fg=COLORS["text"],
                  font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=20, pady=(14, 2))
-        tk.Label(top, text="先给 LoRA 标角色/姿势/风格；随机时只组合同一底模，最多 3 个。",
+        tk.Label(top, text=f"当前使用 {'SFW' if sfw_now else 'NSFW'} 组件库；先给 LoRA 标角色/姿势/风格"
+                          "（可标通用/仅SFW/仅NSFW）；同底模最多 3 个 LoRA。",
                  bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(
                      anchor="w", padx=20, pady=(0, 8))
         counts_label = tk.Label(top, text="", bg=COLORS["bg"], fg=COLORS["accent2"],
@@ -2354,6 +2360,19 @@ class PromptWorkbench:
                  bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 8)).pack(
                      side="left", padx=(8, 0))
 
+        rating_row = tk.Frame(top, bg=COLORS["bg"])
+        rating_row.pack(fill="x", padx=20, pady=(5, 0))
+        tk.Label(rating_row, text="用途", bg=COLORS["bg"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        for rating in ("both", "sfw", "nsfw"):
+            tk.Button(rating_row, text=lroles.RATING_LABELS[rating],
+                      command=lambda r=rating: self._theme_set_rating(records, theme_list, counts_label, r),
+                      bg=COLORS["panel"], fg=COLORS["text"], relief="flat", bd=0,
+                      padx=8, pady=3, cursor="hand2").pack(side="left", padx=(4, 0))
+        tk.Label(rating_row, text="当前模式只抽“通用”和对应模式；不会 SFW/NSFW 混用。",
+                 bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 8)).pack(
+                     side="left", padx=(8, 0))
+
         opts = tk.Frame(top, bg=COLORS["bg"])
         opts.pack(fill="x", padx=20, pady=(10, 0))
         pose_var = tk.BooleanVar(value=True)
@@ -2378,12 +2397,26 @@ class PromptWorkbench:
         tk.Label(opts, text="风格", bg=COLORS["bg"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(3, 0))
 
+        comp_row = tk.Frame(top, bg=COLORS["bg"])
+        comp_row.pack(fill="x", padx=20, pady=(7, 0))
+        tk.Label(comp_row, text=f"随机{'SFW' if sfw_now else 'NSFW'}组件", bg=COLORS["bg"],
+                 fg=COLORS["accent2"], font=("Microsoft YaHei UI", 9, "bold")).pack(side="left")
+        comp_vars = {}
+        defaults = {"服装", "场景", "光线"}
+        for key in tcomponents.keys(sfw_now):
+            var = tk.BooleanVar(value=key in defaults)
+            comp_vars[key] = var
+            tk.Checkbutton(comp_row, text=key, variable=var, bg=COLORS["bg"], fg=COLORS["text"],
+                           activebackground=COLORS["bg"], selectcolor=COLORS["input"],
+                           font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(6, 0))
+
         btns = tk.Frame(top, bg=COLORS["bg"])
         btns.pack(fill="x", padx=20, pady=(12, 14))
         tk.Button(btns, text="随机角色主题并应用",
-                  command=lambda: self._apply_lora_theme(records, pose_var.get(), style_var.get(),
-                                                         float(pose_strength.get()),
-                                                         float(style_strength.get()), top),
+                  command=lambda: self._apply_lora_theme(
+                      records, pose_var.get(), style_var.get(),
+                      float(pose_strength.get()), float(style_strength.get()),
+                      [k for k, v in comp_vars.items() if v.get()], sfw_now, top),
                   bg=COLORS["accent"], fg="#fff", relief="flat", bd=0,
                   padx=16, pady=6, font=("Microsoft YaHei UI", 10, "bold"), cursor="hand2").pack(side="right")
         tk.Button(btns, text="关闭", command=top.destroy, bg=COLORS["card2"], fg=COLORS["text"],
@@ -2398,7 +2431,16 @@ class PromptWorkbench:
         self.lora_role_store.set_role(rec["item"], role)
         self._theme_refresh(listbox, records, counts_label, sel[0])
 
-    def _apply_lora_theme(self, records, pose, style, pose_strength, style_strength, top):
+    def _theme_set_rating(self, records, listbox, counts_label, rating):
+        sel = listbox.curselection()
+        if not sel:
+            return
+        rec = records[sel[0]]
+        self.lora_role_store.set_rating(rec["item"], rating)
+        self._theme_refresh(listbox, records, counts_label, sel[0])
+
+    def _apply_lora_theme(self, records, pose, style, pose_strength, style_strength,
+                          component_keys, sfw, top):
         items = []
         for rec in records:
             base = rec["base"]
@@ -2411,7 +2453,7 @@ class PromptWorkbench:
             messagebox.showinfo(APP_NAME, "没有已安装底模可用的 LoRA。", parent=top)
             return
         picked = lroles.choose_theme([r["item"] for r in items], self.lora_role_store,
-                                     pose=pose, style=style)
+                                     pose=pose, style=style, sfw=sfw)
         if not picked:
             messagebox.showinfo(APP_NAME, "没有标记为“角色”的 LoRA。先选一个 LoRA 点“角色”。", parent=top)
             return
@@ -2439,9 +2481,14 @@ class PromptWorkbench:
         self.selected_loras = selected
         self._refresh_lora_selected()
         triggers = [r.get("trigger", "") for r in (picked["character"], picked.get("pose"), picked.get("style")) if r]
+        components = tcomponents.pick(sfw, component_keys)
+        component_text = tcomponents.compose(components)
+        if component_text:
+            triggers.append(component_text)
         self._prepend_theme_triggers(triggers)
         names = " + ".join(x["name"] for x in selected)
-        self.status_var.set(f"角色主题已应用：{names}")
+        mode_text = "SFW" if sfw else "NSFW"
+        self.status_var.set(f"角色主题已应用（{mode_text}）：{names}")
         top.destroy()
         self.lora_theme_dialog = None
 
