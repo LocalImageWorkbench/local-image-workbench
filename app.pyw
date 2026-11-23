@@ -38,6 +38,7 @@ import core_state as core
 import random_library as rlibrary
 import lora_roles as lroles
 import theme_components as tcomponents
+import prompt_fragments as pfrag
 import lora_match
 import config as appconfig
 import llm_client
@@ -52,7 +53,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.5-beta"
+    APP_VERSION = "0.5.6-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -1733,6 +1734,8 @@ class PromptWorkbench:
         self._btn(actions, "复制负向", self.copy_negative, COLORS["card2"], COLORS["text"]).pack(side="left", padx=(0, 6))
         self._btn(actions, "保存版本", self.save_version, COLORS["card2"], COLORS["text"]).pack(side="left", padx=(0, 6))
         self._btn(actions, "8.0 精修", self.open_tool80, COLORS["card2"], COLORS["text"]).pack(side="left", padx=(0, 6))
+        self._btn(actions, "片段编辑", self.open_prompt_fragments,
+                  COLORS["card2"], COLORS["text"]).pack(side="right", padx=(0, 6))
         self._btn(actions, "清空", self.clear, COLORS["panel"], COLORS["muted"]).pack(side="right")
 
         hist_tab = tk.Frame(self.tab, bg=COLORS["panel"])
@@ -2018,9 +2021,9 @@ class PromptWorkbench:
                       bg=COLORS["panel"], fg=COLORS["accent2"], relief="flat", bd=0,
                       padx=6, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
                           side="left", padx=(0, 3))
-        tk.Label(inspire_row, text="点一下补进描述，可继续改",
-                 bg=COLORS["panel"], fg=COLORS["muted"],
-                 font=("Microsoft YaHei UI", 9)).pack(side="right")
+        tk.Button(inspire_row, text="怎么用 · 片段编辑", command=self.open_prompt_fragments,
+                  bg=COLORS["panel"], fg=COLORS["accent2"], relief="flat", bd=0,
+                  padx=6, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(side="right")
 
         random_options = tk.Frame(simple_card, bg=COLORS["panel"])
         random_options.pack(fill="x", padx=18, pady=(0, 6))
@@ -4876,6 +4879,129 @@ LoRA 目标目录：{lora_root}
             self.status_var.set(
                 f"已随机填入（{picked.get('section')} · {picked.get('category')}/{picked.get('mode')}），可继续修改")
 
+    def _prompt_fragment_target(self):
+        if self.beginner_mode_var.get():
+            return self.beginner_brief, "描述"
+        return self.positive_text, "正向提示词"
+
+    def open_prompt_fragments(self):
+        widget, label = self._prompt_fragment_target()
+        raw = widget.get("1.0", "end").strip()
+        if raw.startswith("例如："):
+            raw = raw[len("例如："):].strip()
+        fragments = pfrag.split_fragments(raw)
+        top = tk.Toplevel(self.root)
+        top.title("提示词片段编辑")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 760, 580)
+        top.transient(self.root)
+        tk.Label(top, text=f"片段编辑 · {label}", bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 15, "bold")).pack(anchor="w", padx=20, pady=(14, 2))
+        tk.Label(top, text="按中文/英文逗号拆分。选中一段可单独替换或删除；也可以追加新片段。\n"
+                          "“随机/人物/服装/场景/光线”是快速追加，这里是精确修改。",
+                 bg=COLORS["bg"], fg=COLORS["muted"], justify="left",
+                 font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=20, pady=(0, 8))
+        body = tk.Frame(top, bg=COLORS["bg"])
+        body.pack(fill="both", expand=True, padx=20)
+        listbox = tk.Listbox(body, bg=COLORS["input"], fg=COLORS["text"],
+                             selectbackground=COLORS["accent2"], selectforeground="#fff",
+                             relief="flat", bd=0, font=("Microsoft YaHei UI", 10),
+                             activestyle="none", exportselection=False)
+        scroll = ttk.Scrollbar(body, orient="vertical", command=listbox.yview)
+        listbox.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        listbox.pack(side="left", fill="both", expand=True)
+
+        edit_row = tk.Frame(top, bg=COLORS["bg"])
+        edit_row.pack(fill="x", padx=20, pady=(8, 0))
+        tk.Label(edit_row, text="片段内容", bg=COLORS["bg"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        entry = tk.Entry(edit_row, bg=COLORS["input"], fg=COLORS["text"],
+                         insertbackground=COLORS["text"], relief="flat", bd=0,
+                         font=("Microsoft YaHei UI", 10))
+        entry.pack(side="left", fill="x", expand=True, padx=(6, 6), ipady=5)
+        status = tk.Label(top, text="", bg=COLORS["bg"], fg=COLORS["muted"],
+                          font=("Microsoft YaHei UI", 9), anchor="w")
+        status.pack(fill="x", padx=20, pady=(6, 0))
+
+        def refresh(select=None):
+            listbox.delete(0, "end")
+            for i, frag in enumerate(fragments):
+                listbox.insert("end", f"{i + 1}. {frag}")
+            if fragments:
+                listbox.selection_set(min(select if select is not None else 0, len(fragments) - 1))
+            status.configure(text=f"{len(fragments)} 个片段 · 保存后自动用逗号连接")
+
+        def load_selected(_event=None):
+            sel = listbox.curselection()
+            if not sel:
+                return
+            entry.delete(0, "end")
+            entry.insert(0, fragments[sel[0]])
+
+        def replace_selected():
+            sel = listbox.curselection()
+            if not sel:
+                messagebox.showinfo(APP_NAME, "先在列表里选一个片段。", parent=top)
+                return
+            try:
+                fragments[:] = pfrag.replace_fragment(fragments, sel[0], entry.get())
+            except Exception as e:
+                messagebox.showwarning(APP_NAME, str(e), parent=top)
+                return
+            refresh(sel[0])
+            entry.focus_set()
+
+        def add_new():
+            try:
+                fragments[:] = pfrag.add_fragment(fragments, entry.get())
+            except Exception as e:
+                messagebox.showwarning(APP_NAME, str(e), parent=top)
+                return
+            refresh(len(fragments) - 1)
+            entry.focus_set()
+
+        def delete_selected():
+            sel = listbox.curselection()
+            if not sel:
+                return
+            try:
+                fragments[:] = pfrag.delete_fragment(fragments, sel[0])
+            except Exception:
+                return
+            refresh(min(sel[0], max(0, len(fragments) - 1)))
+            entry.delete(0, "end")
+
+        listbox.bind("<<ListboxSelect>>", load_selected)
+        listbox.bind("<Double-Button-1>", load_selected)
+        entry.bind("<Return>", lambda e: replace_selected())
+
+        row = tk.Frame(top, bg=COLORS["bg"])
+        row.pack(fill="x", padx=20, pady=(8, 14))
+        for text, command, primary in (
+                ("保存并关闭", None, True),
+                ("追加片段", add_new, False),
+                ("替换选中", replace_selected, False),
+                ("删除选中", delete_selected, False)):
+            tk.Button(row, text=text, command=command or (lambda: save_and_close()),
+                      bg=COLORS["accent"] if primary else COLORS["card2"],
+                      fg="#fff" if primary else COLORS["text"], relief="flat", bd=0,
+                      padx=12, pady=5, cursor="hand2").pack(
+                          side="right" if primary else "left", padx=(0, 6))
+
+        def save_and_close():
+            widget.delete("1.0", "end")
+            widget.insert("1.0", pfrag.join_fragments(fragments))
+            self._update_prompt_counts()
+            self.status_var.set(f"已保存 {len(fragments)} 个提示词片段")
+            top.destroy()
+
+        refresh()
+        if fragments:
+            listbox.selection_set(0)
+            listbox.event_generate("<<ListboxSelect>>")
+        entry.focus_set()
+
     def _beginner_inspire(self, kind):
         values = BEGINNER_INSPIRATION.get(kind) or []
         if not values:
@@ -7685,6 +7811,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

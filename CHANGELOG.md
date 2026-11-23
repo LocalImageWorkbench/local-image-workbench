@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.6-beta
+
+- 简洁模式“继续修改”提示改为可点的“怎么用 · 片段编辑”按钮。
+- 新增提示词片段编辑：按逗号拆分，选中片段替换/删除，追加新片段，保存后写回。
+- 高级模式正向提示词操作区也增加“片段编辑”。
+
+
 ## 0.5.5-beta
 
 - 随机库“范围”下拉框加宽，长分类名不再被截断。
@@ -133,6 +140,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 
