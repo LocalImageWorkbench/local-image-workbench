@@ -169,3 +169,13 @@ python -m unittest discover -s tests -v
 - 使用说明：`使用说明.md`（便携包同目录）
 - 完整更新日志：`CHANGELOG.md`（GitHub 仓库）
 
+
+## 快捷键（0.4 起）
+
+- `Ctrl+Enter`：开始生成图片（简洁/高级通用）
+- `Ctrl+S`：保存版本
+- `Ctrl+L`：聚焦提示词
+- `Ctrl+F`：搜索工作流
+- `Ctrl+Z`：撤销清空
+- `Ctrl+Q`：退出程序
+
