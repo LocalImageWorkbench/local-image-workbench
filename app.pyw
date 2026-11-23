@@ -53,7 +53,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.7-beta"
+    APP_VERSION = "0.5.8-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -1988,7 +1988,7 @@ class PromptWorkbench:
                   bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
                   padx=9, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
                       side="right", padx=(0, 6))
-        tk.Button(character_row, text="清除",
+        tk.Button(character_row, text="清除主题",
                   command=self.clear_beginner_character,
                   bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
                   padx=5, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
@@ -2570,7 +2570,7 @@ class PromptWorkbench:
             self.auto_pick_var.set(False)
             if hasattr(self, "beginner_character_label"):
                 self.beginner_character_label.configure(
-                    text=f"角色主题：{picked['character']['label']}")
+                    text=f"角色主题：{picked['character']['label']}（点“清除主题”恢复自动）")
         self._refresh_lora_selected()
         triggers = [r.get("trigger", "") for r in (picked["character"], picked.get("pose"), picked.get("style")) if r]
         components = tcomponents.pick(sfw, component_keys)
@@ -3580,10 +3580,13 @@ class PromptWorkbench:
             ]
         self.beginner_pinned_lora = None
         self.beginner_character_trigger = ""
+        self.beginner_theme_locked = False
+        self.auto_pick_var.set(True)
+        self.selected_loras = [x for x in self.selected_loras if not x.get("role")]
         if hasattr(self, "beginner_character_label"):
             self.beginner_character_label.configure(text="角色：未选择")
         self._refresh_lora_selected()
-        self.status_var.set("已清除角色")
+        self.status_var.set("已清除角色主题，恢复自动挑选")
 
     def _llm_chat(self, *args, **kwargs):
         """所有 LLM 调用统一记账，供空闲卸载和关闭时使用。"""
@@ -7834,6 +7837,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

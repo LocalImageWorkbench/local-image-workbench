@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.8-beta
+
+- 简洁模式“清除主题”可解除角色主题锁定并恢复自动挑选。
+- 清除时移除角色主题 LoRA，并更新角色提示。
+- 角色主题应用后提示可从“清除主题”恢复。
+
+
 ## 0.5.7-beta
 
 - 简洁模式角色行增加“角色主题随机”入口，复用同一面板。
@@ -148,6 +155,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 
