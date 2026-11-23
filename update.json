@@ -1,7 +1,7 @@
 {
-  "version": "0.5.3-beta",
-  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.3-beta",
-  "notes": "0.5.3-beta：简洁模式白色预览画布，生成结果自动铺入；含 0.5.2 角色主题、SFW/NSFW 随机库和快捷键。",
+  "version": "0.5.4-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.4-beta",
+  "notes": "0.5.4-beta：修复白色结果画布高度，生成图自动铺入；0.5 系列宣传片同步发布。",
   "requires": {
     "windows": "Windows 10/11",
     "python": "便携版已内置；源码版 3.10+",
@@ -9,7 +9,7 @@
     "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
   },
   "assets": {
-    "portable_zip": "local-image-workbench-0.5.3-beta-portable.zip",
-    "sha256": "a74337aea814ba850e3d0249dcf9335f8da1410f1501f15835bfe38c759b9803"
+    "portable_zip": "local-image-workbench-0.5.4-beta-portable.zip",
+    "sha256": "391aedc747d4c9728f707d5a9c728a9f6529c817ba1270595a790fbe1435e168"
   }
 }

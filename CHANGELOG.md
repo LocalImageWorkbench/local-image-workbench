@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4-beta
+
+- 修复简洁模式白色结果画布高度为 0、看起来仍是一块空白的问题。
+- 预览画布最小高度 340，生成图 1/2/4 张自动铺入。
+- 宣传片配套的 0.5 系列演示画面。
+
+
 ## 0.5.3-beta
 
 - 简洁模式结果区改为白色预览画布：无图时显示空状态，生成后按 1/2/4 张自动缩放铺入。
@@ -120,6 +127,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 

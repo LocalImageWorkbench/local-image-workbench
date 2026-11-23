@@ -52,7 +52,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.3-beta"
+    APP_VERSION = "0.5.4-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -2155,7 +2155,7 @@ class PromptWorkbench:
         self.beginner_result_paths = []
         self.beginner_preview_canvas = tk.Canvas(
             self.beginner_results_inner, bg="#ffffff", highlightbackground=COLORS["line"],
-            highlightthickness=1, bd=0)
+            highlightthickness=1, bd=0, height=340)
         self.beginner_preview_canvas.grid(row=0, column=0, columnspan=2, sticky="nsew",
                                           padx=8, pady=8)
         self.beginner_preview_canvas.bind(
@@ -7685,6 +7685,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
