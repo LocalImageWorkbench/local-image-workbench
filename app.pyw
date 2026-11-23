@@ -91,6 +91,13 @@ BEGINNER_BASES = [
     {"key": "anima", "icon": "✿", "label": "Anima", "target": "Anima（Danbooru tag）",
      "workflow": "anima", "note": "二次元；NSFW 需适配 LoRA"},
 ]
+BASE_RATING_NOTES = {
+    "illustrious": {"sfw": "二次元插画", "nsfw": "需匹配同底模 LoRA"},
+    "moss": {"sfw": "写实 / 二次元通用", "nsfw": "成人向特化"},
+    "krea2": {"sfw": "摄影感 / 质感", "nsfw": "需实测"},
+    "qwen": {"sfw": "通用 / 写实", "nsfw": "不保证"},
+    "anima": {"sfw": "二次元", "nsfw": "需适配 LoRA"},
+}
 STYLE_BASE_RECOMMENDATIONS = {
     "无风格": ("illustrious", "通用默认"),
     "二次元": ("illustrious", "二次元生态最稳"),
@@ -2221,23 +2228,15 @@ class PromptWorkbench:
         if not hasattr(self, "beginner_base_label"):
             return
         base = self._beginner_base()
-        note = base["note"]
-        if self.mode.get() == "SFW":
-            note = {
-                "illustrious": "二次元通用",
-                "moss": "MOSS Image · SFW 需控制提示词",
-                "krea2": "摄影感",
-                "qwen": "通用/写实",
-                "anima": "二次元",
-            }.get(base["key"], note)
-        suffix = " · NSFW 需匹配 LoRA" if self.mode.get() == "NSFW" and base["key"] != "moss" else ""
+        rating = BASE_RATING_NOTES.get(base["key"], {"sfw": "通用", "nsfw": "需实测"})
+        suffix = ""
         vram = int(getattr(self, "gpu_vram_mb", 0) or 0)
         need = BASE_VRAM_REQUIREMENTS.get(base["key"], 0)
         shortage = bool(vram and need and need > vram)
         if shortage:
-            suffix += f" · ⚠ 显存偏低（约需 {need / 1024:.0f}GB）"
+            suffix = f" · ⚠ 显存偏低（约需 {need / 1024:.0f}GB）"
         self.beginner_base_label.configure(
-            text=f"{note}{suffix}",
+            text=f"SFW：{rating['sfw']}  ·  NSFW：{rating['nsfw']}{suffix}",
             fg=COLORS["red"] if shortage else COLORS["accent2"])
 
     def _recommended_beginner_base(self):
