@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0-preview
+## 0.5.0-beta
 
 - 随机提示词升级为“精选库 + 模板组合”：精选完整句库默认使用，模板按主体/服装/场景/光线/镜头组合。
 - 随机库支持导入、导出、恢复内置；用户库保存在 `%APPDATA%\PromptWorkbench\random-library.json`。
@@ -95,6 +95,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 
