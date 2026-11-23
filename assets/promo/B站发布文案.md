@@ -47,7 +47,7 @@ GitHub：
 https://github.com/LocalImageWorkbench/local-image-workbench
 
 Release：
-https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.2.0-beta
+https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.3.0-beta
 
 
 本视频为纯旁白，无背景音乐；旁白由 AI 语音生成，演示内容为 SFW。
@@ -60,7 +60,7 @@ https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.2.0
 https://github.com/LocalImageWorkbench/local-image-workbench
 
 Release 便携版：
-https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.2.0-beta
+https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.3.0-beta
 
 第一次用可以先走三步向导；没有环境可把 Release 链接交给大肥鱼 DeepSeek Harness，让它协助部署。
 便携版不要求另装 Python，但仍需要 ComfyUI、Ollama 和模型。
@@ -135,6 +135,7 @@ https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.2.0
 5. 分区选科技 → 计算机技术
 6. 有 AI 声明就勾选，旁白为 AI 语音
 7. 预览后发布
+
 
 
 

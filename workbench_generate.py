@@ -166,7 +166,8 @@ def _n(ct, **kw):
     return {"class_type": ct, "inputs": kw}
 
 
-def build_graph(workflow_key, positive, negative, loras, count=1, width=None, height=None):
+def build_graph(workflow_key, positive, negative, loras, count=1, width=None, height=None,
+                params=None):
     spec = WORKFLOWS[workflow_key]
     count = max(1, min(4, int(count)))
     chosen = []
@@ -249,11 +250,31 @@ def build_graph(workflow_key, positive, negative, loras, count=1, width=None, he
         w = max(256, min(2048, int(width)))
     if height:
         h = max(256, min(2048, int(height)))
+    if params:
+        try:
+            if params.get("width"):
+                w = max(256, min(2048, int(params["width"])))
+            if params.get("height"):
+                h = max(256, min(2048, int(params["height"])))
+            if params.get("steps") not in (None, ""):
+                steps = max(1, min(200, int(params["steps"])))
+            if params.get("cfg") not in (None, ""):
+                cfg = max(0.0, min(30.0, float(params["cfg"])))
+            if params.get("sampler"):
+                sampler = str(params["sampler"])
+            if params.get("scheduler"):
+                scheduler = str(params["scheduler"])
+        except (TypeError, ValueError):
+            pass
     if latent_cls == "EmptySD3LatentImage":
         latent = add("EmptySD3LatentImage", width=w, height=h, batch_size=count)
     else:
         latent = add("EmptyLatentImage", width=w, height=h, batch_size=count)
-    seed = random.randint(1, 2**31 - 1)
+    try:
+        requested_seed = int((params or {}).get("seed") or 0)
+    except (TypeError, ValueError):
+        requested_seed = 0
+    seed = requested_seed if requested_seed > 0 else random.randint(1, 2**31 - 1)
     if workflow_key == "moss":
         ks = add("KSamplerAdvanced", model=model, positive=[pos, 0], negative=[neg, 0],
                  latent_image=[latent, 0], add_noise="enable", noise_seed=seed,
@@ -270,11 +291,12 @@ def build_graph(workflow_key, positive, negative, loras, count=1, width=None, he
 
 
 def generate(workflow_key, positive, negative, loras, count=1, close_after=True, out_dir=None,
-             width=None, height=None):
+             width=None, height=None, params=None):
     if not positive.strip():
         raise ValueError("正向提示词为空")
     started = ensure_comfy()
-    wf = build_graph(workflow_key, positive, negative, loras, count, width=width, height=height)
+    wf = build_graph(workflow_key, positive, negative, loras, count, width=width, height=height,
+                     params=params)
     output_dir = Path(out_dir) if out_dir else OUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
     try:
@@ -310,7 +332,15 @@ def generate(workflow_key, positive, negative, loras, count=1, close_after=True,
                 files.append(str(p))
         if not files:
             raise RuntimeError("没有拿到图片")
-        return {"images": files, "started": started, "closed": False}
+        actual_seed = None
+        for node in wf.values():
+            if node.get("class_type") == "KSampler":
+                actual_seed = node.get("inputs", {}).get("seed")
+                break
+            if node.get("class_type") == "KSamplerAdvanced":
+                actual_seed = node.get("inputs", {}).get("noise_seed")
+                break
+        return {"images": files, "started": started, "closed": False, "seed": actual_seed}
     finally:
         if close_after and started:
             try:

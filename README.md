@@ -4,7 +4,7 @@ Windows 本地出图工作台，连接 Ollama 生成/修改提示词，并连接
 
 ## 当前状态
 
-这是 **v0.2.0-beta 预览版**，面向已经安装 ComfyUI 和 Ollama（或其他 OpenAI 兼容 LLM）的用户。便携版不要求另装 Python，但仍需要 ComfyUI、Ollama 和模型文件。
+这是 **v0.3.0-beta 预览版**，面向已经安装 ComfyUI 和 Ollama（或其他 OpenAI 兼容 LLM）的用户。便携版不要求另装 Python，但仍需要 ComfyUI、Ollama 和模型文件。
 
 2026-11-22 起，本目录是开发主线；旧的本地自用版已归档，不再加新功能。迁移说明见 `docs/MIGRATION.md`。
 
@@ -25,7 +25,7 @@ https://www.bilibili.com/video/BV12kyjz9EKA/
 - 16:9 主封面：https://github.com/LocalImageWorkbench/local-image-workbench/releases/download/v0.2.0-beta/cover-16x9-local-image-workbench.png
 - 4:3 个人空间封面：https://github.com/LocalImageWorkbench/local-image-workbench/releases/download/v0.2.0-beta/cover-4x3-local-image-workbench.png
 
-### 发布硬化
+### 高级模式\n\n- 就绪状态条：底模缺失、LoRA 兼容、ComfyUI 状态\n- Seed / Steps / CFG / Sampler / Scheduler / 宽高参数面板\n- 正向/负向字符计数\n- LoRA 强度、启用/旁路、触发词复制、底模兼容标记\n- 工作流导入校验、最近两张结果对比\n- 首次切换引导；设置页可重看简洁/高级引导\n\n### 发布硬化
 
 - 生成结束/失败后自动刷新 LLM 与 ComfyUI 状态。
 - 角色搜索、浏览器挑选、推荐包、DSH 页面、C 站教程防止重复弹窗。
@@ -162,3 +162,4 @@ python -m unittest discover -s tests -v
 - 旧便携包链接已不再作为主下载，请使用上面的整合包。
 
 夸克是补充发行渠道，不是 GitHub 镜像；不含模型权重，NSFW 仅限 18+。
+

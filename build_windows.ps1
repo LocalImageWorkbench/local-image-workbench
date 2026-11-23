@@ -14,7 +14,7 @@ if (-not (Test-Path $venv)) {
     & $python.Source -m venv $venv
 }
 $buildPy = Join-Path $venv "Scripts\python.exe"
-& $buildPy -m pip install --upgrade pip pyinstaller requests
+& $buildPy -m pip install --upgrade pip pyinstaller -r requirements.txt
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & $buildPy -m PyInstaller `
@@ -31,5 +31,5 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $dist = Join-Path $PSScriptRoot "dist\PromptWorkbench"
-Copy-Item README.md, LICENSE, THIRD_PARTY_NOTICES.md -Destination $dist -Force
+Copy-Item README.md, LICENSE, THIRD_PARTY_NOTICES.md, CHANGELOG.md -Destination $dist -Force
 Write-Host "Built: $dist\PromptWorkbench.exe"

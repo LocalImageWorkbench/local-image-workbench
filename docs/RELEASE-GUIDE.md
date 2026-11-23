@@ -1,4 +1,4 @@
-# 发布与夸克下载教程（0.2.0-beta）
+# 发布与夸克下载教程（0.3.0-beta）
 
 这份文档分两部分：
 
@@ -11,11 +11,11 @@
 
 ### 1. 确认版本和文件
 
-当前版本：`0.2.0-beta`
+当前版本：`0.3.0-beta`
 
 建议准备：
 
-- `local-image-workbench-0.2.0-beta-portable.zip`：GitHub 主发布，约 16.8 MB
+- `local-image-workbench-0.3.0-beta-portable.zip`：GitHub 主发布，约 24.6 MB
 - `本地出图工作台-0.2.0-runtime.zip`：夸克离线运行包
 - `本地出图工作台-0.2.0-models-sfw.zip`：夸克 SFW 选配
 - `本地出图工作台-0.2.0-models-nsfw.zip`：夸克 NSFW 选配，单独链接
@@ -32,7 +32,7 @@
 在 PowerShell 中执行：
 
 ```powershell
-Get-FileHash .\local-image-workbench-0.2.0-beta-portable.zip -Algorithm SHA256
+Get-FileHash .\local-image-workbench-0.3.0-beta-portable.zip -Algorithm SHA256
 ```
 
 把结果写进 `SHA256SUMS.txt`。用户下载后可以核对。
@@ -50,22 +50,22 @@ Get-FileHash .\local-image-workbench-0.2.0-beta-portable.zip -Algorithm SHA256
 
 ### 1. 创建 Release
 
-- Tag：`v0.2.0-beta`
-- 标题：`本地出图工作台 0.2.0-beta`
-- 上传 `local-image-workbench-0.2.0-beta-portable.zip`
+- Tag：`v0.3.0-beta`
+- 标题：`本地出图工作台 0.3.0-beta`
+- 上传 `local-image-workbench-0.3.0-beta-portable.zip`
 - 上传 `SHA256SUMS.txt`
 - 不要上传模型权重
 
 ### 2. Release 说明模板
 
 ```text
-本地出图工作台 0.2.0-beta
+本地出图工作台 0.3.0-beta
 
 Windows 本地出图工作台：Ollama 生成提示词，ComfyUI 出图；自带新手模式、角色 LoRA 搜索、模型下载和 C 站教程。
 
 ## 下载
 
-- 便携版：local-image-workbench-0.2.0-beta-portable.zip（约 16.8 MB）
+- 便携版：local-image-workbench-0.3.0-beta-portable.zip（约 24.6 MB）
 - 不要求另装 Python
 - 仍需要 ComfyUI、Ollama 和模型文件
 
@@ -185,7 +185,7 @@ SHA256：b627c5b6cc65ba5931f56c8fcc40524cc38873097000371dafd00fefd32ee78e
 PowerShell 中执行：
 
 ```powershell
-Get-FileHash .\local-image-workbench-0.2.0-beta-portable.zip -Algorithm SHA256
+Get-FileHash .\local-image-workbench-0.3.0-beta-portable.zip -Algorithm SHA256
 ```
 
 和发布页的 SHA256 对比。不一致就重新下载，不要运行。
@@ -233,6 +233,7 @@ Get-FileHash .\local-image-workbench-0.2.0-beta-portable.zip -Algorithm SHA256
 - [ ] 干净 Windows 机器测试通过
 - [ ] 发布页写明“夸克是补充发行，不是镜像”
 - [ ] 发布页写明 DSH 能做什么、不能保证什么
+
 
 
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0-beta
+
+- 高级模式 P0/P1/P2 改造：就绪状态条、参数面板、LoRA 管理、工作流导入校验、提示词计数、结果对比、折叠参数、状态记忆。
+- 新增首次切换高级模式引导；环境设置可重看简洁/高级引导。
+- Seed 实际值显示、固定为本次、写入保存版本历史；固定 Seed 批量出图递增。
+- 新增系统托盘最小化、ComfyUI 启停、随机提示词、收藏夹、错误面板、模型完整性检查、停止后续、更新日志、界面缩放。
+- 修复禁用按钮文字对比度、SFW/NSFW 底模说明分栏、ComfyUI 状态显示。
+- 便携包新增 pystray/Pillow 依赖。
+- 发布脚本、代码签名钩子、版本/打包流程。
+
+
 ## 0.2.0-beta
 
 - 产品显示名改为“本地出图工作台”，宣传语“提示词工作台 · 快捷本地出图”；内部目录、数据目录和仓库名不变。
@@ -63,4 +74,5 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 

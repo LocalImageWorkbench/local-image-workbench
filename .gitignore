@@ -25,3 +25,8 @@ docs/*.jpeg
 docs/LOCAL-SETUP.md
 .github/workflows/
 promo/
+build*/
+dist*/
+preview/
+rollback/
+promo/

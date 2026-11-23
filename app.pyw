@@ -23,6 +23,13 @@ from datetime import datetime
 from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox, ttk, filedialog
+
+try:
+    import pystray
+    from PIL import Image as PILImage, ImageDraw as PILImageDraw, ImageTk as PILImageTk
+except Exception:
+    pystray = None
+    PILImage = PILImageDraw = PILImageTk = None
 from tkinter.scrolledtext import ScrolledText
 
 import workbench_generate as wbgen
@@ -40,7 +47,7 @@ APP_DIR = appconfig.resource_path("")
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.2.0-beta"
+    APP_VERSION = "0.3.0-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -57,6 +64,7 @@ if not APP_LOG.handlers:
     APP_LOG.addHandler(_log_handler)
 HISTORY_FILE = DATA_DIR / "history.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
+FAVORITES_FILE = DATA_DIR / "prompt-favorites.json"
 IMPORTED_WORKFLOWS_FILE = DATA_DIR / "imported-workflows.json"
 PROMPT_LIBRARY = Path(CFG.get("prompt_library_dir") or (DATA_DIR / "prompt-library"))
 WORKBENCH_LIBRARY = PROMPT_LIBRARY / "工作台"
@@ -128,6 +136,7 @@ BEGINNER_RATIOS = {
     "方图": (1024, 1024),
     "横图": (1216, 832),
 }
+BEGINNER_DEFAULT_PROMPT = "雪山脚下的湖泊，清晨薄雾，远处日照金山，宁静的电影感风景摄影"
 RANDOM_PROMPTS = [
     "雪山脚下的湖泊，清晨薄雾，远处日照金山，宁静的电影感风景摄影",
     "雨后竹林小径，湿润石板路，柔和的散射光，清新的东方意境",
@@ -785,10 +794,23 @@ class PromptWorkbench:
         self._llm_active = 0
         self._llm_last_used = time.monotonic()
         self._exiting = False
+        self.tray_queue = queue.Queue()
         self.lora_filter = tk.StringVar(value="全部")
         self.lora_strength = tk.DoubleVar(value=0.7)
         self.generation_workflow_var = tk.StringVar(value="")
         self.workflow_search_var = tk.StringVar(value="")
+        self.advanced_seed_var = tk.StringVar(value=str(self.settings.get("advanced_seed", "0")))
+        self.advanced_steps_var = tk.StringVar(value=str(self.settings.get("advanced_steps", "")))
+        self.advanced_cfg_var = tk.StringVar(value=str(self.settings.get("advanced_cfg", "")))
+        self.advanced_sampler_var = tk.StringVar(value=str(self.settings.get("advanced_sampler", "")))
+        self.advanced_scheduler_var = tk.StringVar(value=str(self.settings.get("advanced_scheduler", "")))
+        self.advanced_width_var = tk.StringVar(value=str(self.settings.get("advanced_width", "")))
+        self.advanced_height_var = tk.StringVar(value=str(self.settings.get("advanced_height", "")))
+        self.advanced_params_open = tk.BooleanVar(value=bool(self.settings.get("advanced_params_open", True)))
+        self.advanced_guide_seen = bool(self.settings.get("advanced_guide_seen", False))
+        self._last_generated_seed = self.settings.get("last_seed")
+        last_seed = self._last_generated_seed if self._last_generated_seed is not None else "—"
+        self.last_seed_text = tk.StringVar(value=f"本次实际 seed：{last_seed}")
         self.lora_rec_rows = []
         self._manual_links = set()
         self._link_done = False
@@ -813,6 +835,7 @@ class PromptWorkbench:
         self.beginner_base_reco_key = None
         self.gpu_name, self.gpu_vram_mb = detect_gpu_memory()
         self.gen_cancel = threading.Event()
+        self.gen_stop_after = threading.Event()
         self.env_queue = queue.Queue()
         self.beginner_pinned_lora = None
         self.beginner_character_trigger = ""
@@ -838,9 +861,12 @@ class PromptWorkbench:
         apply_dark_titlebar(self.root)
         self.root.after(250, lambda: apply_dark_titlebar(self.root))
         self._load_settings()
+        self.root.after(300, self._update_prompt_counts)
+        self._init_tray()
         self.root.after(150, self._poll_queue)
         self.root.after(300, self._bind_left_mousewheel)
         self.root.after(30000, self._check_llm_idle)
+        self.root.after(200, self._poll_tray_queue)
         if CFG.is_new or not CFG.paths("lora_roots"):
             self.root.after(700, self.open_first_run_wizard)
         threading.Thread(target=self._check_health, daemon=True).start()
@@ -1008,6 +1034,7 @@ class PromptWorkbench:
         self._btn(nav, "模型指南", self.open_model_guide, COLORS["panel"], COLORS["muted"], icon="help").pack(fill="x", pady=3)
         self._btn(nav, "模型中心", self.open_model_center, COLORS["panel"], COLORS["muted"], icon="cloud").pack(fill="x", pady=3)
         self._btn(nav, "检查更新", self.check_updates, COLORS["panel"], COLORS["muted"], icon="refresh").pack(fill="x", pady=3)
+        self._btn(nav, "更新日志", self.open_changelog, COLORS["panel"], COLORS["muted"], icon="history").pack(fill="x", pady=3)
         self.advanced_nav_widgets = [self.nav_generate, self.nav_history, self.nav_library, self.nav_tool80]
 
         tk.Frame(sidebar, bg=COLORS["line"], height=1).pack(fill="x", padx=16, pady=18)
@@ -1088,7 +1115,63 @@ class PromptWorkbench:
         self.target_desc = tk.Label(top, text="", bg=COLORS["card"], fg=COLORS["muted"],
                                     font=("Microsoft YaHei UI", 9), anchor="w",
                                     justify="left", wraplength=1250)
-        self.target_desc.pack(fill="x", padx=16, pady=(0, 10))
+        self.target_desc.pack(fill="x", padx=16, pady=(0, 6))
+
+        adv_bar = tk.Frame(top, bg=COLORS["card"])
+        adv_bar.pack(fill="x", padx=16, pady=(0, 4))
+        self.advanced_status = tk.Label(adv_bar, text="检查就绪状态…", bg=COLORS["card"],
+                                        fg=COLORS["muted"], font=("Microsoft YaHei UI", 9),
+                                        anchor="w")
+        self.advanced_status.pack(side="left", fill="x", expand=True)
+        tk.Button(adv_bar, text="高级模式说明", command=self._show_advanced_guide,
+                  bg=COLORS["card"], fg=COLORS["accent2"], relief="flat", bd=0,
+                  padx=5, pady=2, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(side="right")
+        self.advanced_params_toggle = tk.Button(
+            adv_bar, text="收起生成参数" if self.advanced_params_open.get() else "展开生成参数",
+            command=self._toggle_advanced_params, bg=COLORS["card"], fg=COLORS["muted"],
+            relief="flat", bd=0, padx=5, pady=2, font=("Microsoft YaHei UI", 9), cursor="hand2")
+        self.advanced_params_toggle.pack(side="right", padx=(0, 4))
+
+        self.advanced_params_frame = tk.Frame(top, bg=COLORS["card2"])
+        if self.advanced_params_open.get():
+            self.advanced_params_frame.pack(fill="x", padx=16, pady=(0, 8))
+        params_inner = tk.Frame(self.advanced_params_frame, bg=COLORS["card2"])
+        params_inner.pack(fill="x", padx=8, pady=6)
+        def param_entry(label, var, width=7):
+            tk.Label(params_inner, text=label, bg=COLORS["card2"], fg=COLORS["muted"],
+                     font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 3))
+            tk.Entry(params_inner, textvariable=var, width=width, bg=COLORS["input"],
+                     fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat", bd=0,
+                     font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 8), ipady=3)
+        param_entry("Seed", self.advanced_seed_var, 11)
+        tk.Label(params_inner, text="0=随机", bg=COLORS["card2"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(0, 8))
+        param_entry("Steps", self.advanced_steps_var, 5)
+        param_entry("CFG", self.advanced_cfg_var, 5)
+        tk.Label(params_inner, text="Sampler", bg=COLORS["card2"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 3))
+        ttk.Combobox(params_inner, textvariable=self.advanced_sampler_var, width=12,
+                     values=("", "euler", "euler_ancestral", "er_sde", "dpmpp_2m", "dpmpp_2m_sde", "ddim")).pack(side="left", padx=(0, 8))
+        tk.Label(params_inner, text="Scheduler", bg=COLORS["card2"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 3))
+        ttk.Combobox(params_inner, textvariable=self.advanced_scheduler_var, width=10,
+                     values=("", "normal", "simple", "beta", "karras", "exponential")).pack(side="left", padx=(0, 8))
+        param_entry("宽", self.advanced_width_var, 5)
+        param_entry("高", self.advanced_height_var, 5)
+        tk.Button(params_inner, text="重置", command=self._reset_advanced_params,
+                  bg=COLORS["card2"], fg=COLORS["muted"], relief="flat", bd=0,
+                  padx=5, pady=2, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(side="right")
+        seed_info = tk.Frame(self.advanced_params_frame, bg=COLORS["card2"])
+        seed_info.pack(fill="x", padx=10, pady=(0, 3))
+        tk.Label(seed_info, textvariable=self.last_seed_text, bg=COLORS["card2"],
+                 fg=COLORS["accent2"], font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Button(seed_info, text="固定为本次", command=self._lock_last_seed,
+                  bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
+                  padx=6, pady=1, font=("Microsoft YaHei UI", 8), cursor="hand2").pack(
+                      side="left", padx=(8, 0))
+        tk.Label(self.advanced_params_frame, text="空值=使用工作流默认；仅对内置工作流生效，导入工作流保持原生参数。",
+                 bg=COLORS["card2"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 8),
+                 anchor="w").pack(fill="x", padx=10, pady=(0, 5))
 
         # 工作区
         body = tk.Frame(main, bg=COLORS["bg"])
@@ -1202,6 +1285,21 @@ class PromptWorkbench:
         self._btn(lora_actions, "开/旁", self._toggle_lora_enabled, COLORS["panel"], COLORS["muted"]).pack(side="left", padx=(4, 0))
         self._btn(lora_actions, "移除选中 LoRA", self._remove_lora, COLORS["panel"], COLORS["muted"]).pack(side="right")
 
+        lora_edit = tk.Frame(lora_box, bg=COLORS["card2"])
+        lora_edit.pack(fill="x", padx=8, pady=(0, 6))
+        tk.Label(lora_edit, text="选中强度", bg=COLORS["card2"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        self.selected_lora_strength = tk.DoubleVar(value=0.7)
+        tk.Spinbox(lora_edit, from_=0.1, to=1.2, increment=0.05,
+                   textvariable=self.selected_lora_strength, width=4,
+                   bg=COLORS["input"], fg=COLORS["text"], relief="flat", bd=0).pack(
+                       side="left", padx=(4, 4))
+        self._btn(lora_edit, "应用强度", self._apply_selected_lora_strength,
+                  COLORS["panel"], COLORS["muted"]).pack(side="left")
+        self._btn(lora_edit, "复制触发词", self._copy_selected_lora_trigger,
+                  COLORS["panel"], COLORS["muted"]).pack(side="left", padx=(4, 0))
+        self.lora_selected_list.bind("<<ListboxSelect>>", lambda e: self._on_selected_lora())
+
         tk.Frame(left, bg=COLORS["panel"]).pack(fill="both", expand=True)
 
         tip = tk.Label(left, text="Ctrl + Enter 生成  ·  结果可直接编辑", bg=COLORS["panel"],
@@ -1261,17 +1359,25 @@ class PromptWorkbench:
 
         tk.Label(out_tab, text="Positive / 正向", bg=COLORS["panel"], fg=COLORS["green"],
                  font=("Microsoft YaHei UI", 9, "bold")).grid(row=0, column=0, sticky="w", padx=4, pady=(4, 2))
+        self.positive_count = tk.Label(out_tab, text="0 字符", bg=COLORS["panel"],
+                                       fg=COLORS["muted"], font=("Microsoft YaHei UI", 9))
+        self.positive_count.grid(row=0, column=0, sticky="e", padx=6, pady=(4, 2))
         self.positive_text = ScrolledText(out_tab, wrap="word", height=9, bg=COLORS["input"],
                                           fg=COLORS["text"], insertbackground=COLORS["text"],
                                           relief="flat", bd=0, font=FONT_MONO, padx=8, pady=8)
         self.positive_text.grid(row=1, column=0, sticky="nsew", padx=2, pady=(0, 6))
+        self.positive_text.bind("<KeyRelease>", lambda e: self._update_prompt_counts())
 
         tk.Label(out_tab, text="Negative / 负向", bg=COLORS["panel"], fg=COLORS["red"],
                  font=("Microsoft YaHei UI", 9, "bold")).grid(row=2, column=0, sticky="w", padx=4, pady=(0, 2))
+        self.negative_count = tk.Label(out_tab, text="0 字符", bg=COLORS["panel"],
+                                       fg=COLORS["muted"], font=("Microsoft YaHei UI", 9))
+        self.negative_count.grid(row=2, column=0, sticky="e", padx=6, pady=(0, 2))
         self.negative_text = ScrolledText(out_tab, wrap="word", height=6, bg=COLORS["input"],
                                           fg=COLORS["text"], insertbackground=COLORS["text"],
                                           relief="flat", bd=0, font=FONT_MONO, padx=8, pady=8)
         self.negative_text.grid(row=3, column=0, sticky="nsew", padx=2, pady=(0, 6))
+        self.negative_text.bind("<KeyRelease>", lambda e: self._update_prompt_counts())
 
         actions = tk.Frame(out_tab, bg=COLORS["panel"])
         actions.grid(row=4, column=0, sticky="ew", pady=(2, 2))
@@ -1320,6 +1426,8 @@ class PromptWorkbench:
                  font=("Microsoft YaHei UI", 9, "bold")).pack(side="left")
         self._btn(result_head, "打开输出目录", self.open_output_dir,
                   COLORS["card2"], COLORS["text"]).pack(side="right")
+        self._btn(result_head, "对比最近两张", self.compare_recent_results,
+                  COLORS["card2"], COLORS["text"]).pack(side="right", padx=(0, 6))
         self.result_note = tk.Label(self.results_tab, text="", bg=COLORS["panel"], fg=COLORS["muted"],
                                     font=("Microsoft YaHei UI", 9), anchor="w", justify="left",
                                     wraplength=620)
@@ -1427,9 +1535,15 @@ class PromptWorkbench:
         self.beginner_base_label = tk.Label(mode_row, text="", bg=COLORS["panel"],
                                             fg=COLORS["accent2"], font=("Microsoft YaHei UI", 9, "bold"))
         self.beginner_base_label.pack(side="left")
+        self.beginner_comfy_stop_btn = self._btn(
+            mode_row, "停止 ComfyUI", self._stop_comfy_ui, COLORS["card2"], COLORS["muted"])
+        self.beginner_comfy_stop_btn.pack(side="right", padx=(0, 5))
+        self.beginner_comfy_start_btn = self._btn(
+            mode_row, "启动 ComfyUI", self._start_comfy_ui, COLORS["card2"], COLORS["text"])
+        self.beginner_comfy_start_btn.pack(side="right", padx=(0, 5))
         tk.Button(mode_row, text="环境设置", command=self.open_settings_dialog,
                   bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
-                  padx=10, pady=4, cursor="hand2").pack(side="right")
+                  padx=10, pady=4, cursor="hand2").pack(side="right", padx=(0, 5))
 
         base_row = tk.Frame(simple_card, bg=COLORS["panel"])
         base_row.pack(fill="x", padx=18, pady=(4, 4))
@@ -1444,6 +1558,10 @@ class PromptWorkbench:
             bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
             padx=6, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2")
         self.beginner_base_toggle_btn.pack(side="left", padx=(8, 0))
+        tk.Button(base_row, text="检查模型", command=self._check_models,
+                  bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
+                  padx=6, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
+                      side="left", padx=(6, 0))
         self.beginner_base_cards = tk.Frame(base_row, bg=COLORS["panel"])
         self.beginner_base_buttons = []
         for base in BEGINNER_BASES:
@@ -1519,7 +1637,7 @@ class PromptWorkbench:
                                            insertbackground=COLORS["text"], relief="flat", bd=0,
                                            font=("Microsoft YaHei UI", 11), padx=12, pady=10)
         self.beginner_brief.pack(fill="x", padx=18, pady=(0, 8))
-        self.beginner_brief.insert("1.0", "例如：雪山脚下的湖泊，清晨薄雾，远处日照金山，宁静的电影感风景摄影")
+        self.beginner_brief.insert("1.0", f"例如：{BEGINNER_DEFAULT_PROMPT}")
 
         inspire_row = tk.Frame(simple_card, bg=COLORS["panel"])
         inspire_row.pack(fill="x", padx=18, pady=(0, 6))
@@ -1529,6 +1647,14 @@ class PromptWorkbench:
                   bg=COLORS["card2"], fg=COLORS["accent2"], relief="flat", bd=0,
                   padx=8, pady=3, font=("Microsoft YaHei UI", 9, "bold"), cursor="hand2").pack(
                       side="left", padx=(0, 6))
+        tk.Button(inspire_row, text="收藏", command=self._favorite_prompt,
+                  bg=COLORS["panel"], fg=COLORS["accent2"], relief="flat", bd=0,
+                  padx=5, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
+                      side="left", padx=(0, 2))
+        tk.Button(inspire_row, text="收藏夹", command=self._open_favorites,
+                  bg=COLORS["panel"], fg=COLORS["accent2"], relief="flat", bd=0,
+                  padx=5, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
+                      side="left", padx=(0, 5))
         for label in ("随机", "人物", "服装", "场景", "光线"):
             tk.Button(inspire_row, text=label,
                       command=lambda k=label: self._beginner_inspire(k),
@@ -1619,6 +1745,11 @@ class PromptWorkbench:
                                            font=("Microsoft YaHei UI", 9), cursor="hand2")
         self._decorate_button(self.beginner_stop_btn, "stop")
         self.beginner_stop_btn.pack(side="right")
+        self.beginner_stop_after_btn = tk.Button(
+            progress_line, text="停止后续", state="disabled", command=self._stop_after,
+            bg=COLORS["card2"], fg=COLORS["muted"], relief="flat", bd=0, padx=9, pady=2,
+            font=("Microsoft YaHei UI", 9), cursor="hand2")
+        self.beginner_stop_after_btn.pack(side="right", padx=(0, 5))
         result_actions = tk.Frame(simple_card, bg=COLORS["panel"])
         result_actions.pack(fill="x", padx=18, pady=(0, 4))
         self.beginner_repeat_btn = tk.Button(
@@ -1719,13 +1850,43 @@ class PromptWorkbench:
             item["enabled"] = not bool(item.get("enabled", True))
             self._refresh_lora_selected()
 
+    def _on_selected_lora(self):
+        sel = self.lora_selected_list.curselection()
+        if sel and sel[0] < len(self.selected_loras):
+            self.selected_lora_strength.set(float(self.selected_loras[sel[0]].get("strength", 0.7)))
+
+    def _apply_selected_lora_strength(self):
+        sel = self.lora_selected_list.curselection()
+        if not sel or sel[0] >= len(self.selected_loras):
+            return
+        item = self.selected_loras[sel[0]]
+        item["strength"] = round(float(self.selected_lora_strength.get()), 2)
+        self._refresh_lora_selected()
+        self.lora_selected_list.selection_set(sel[0])
+        self.status_var.set(f"LoRA 强度已改为 {item['strength']}")
+
+    def _copy_selected_lora_trigger(self):
+        sel = self.lora_selected_list.curselection()
+        if not sel or sel[0] >= len(self.selected_loras):
+            return
+        trigger = self.selected_loras[sel[0]].get("trigger", "")
+        self.root.clipboard_clear()
+        self.root.clipboard_append(trigger)
+        self.root.update_idletasks()
+        self.status_var.set("触发词已复制" if trigger else "该 LoRA 没有明确触发词")
+
     def _refresh_lora_selected(self):
         self.lora_selected_list.delete(0, "end")
+        key = wbgen.workflow_for_target(self.target_var.get())
+        target_base = (wbgen.WORKFLOWS.get(key) or {}).get("base", "")
         for item in self.selected_loras:
             trig = item.get("trigger") or "无明确触发词"
             state = "开" if item.get("enabled", True) else "旁"
             strength = item.get("strength", 0.7)
-            self.lora_selected_list.insert("end", f"[{state}] {item['name']}｜{strength}｜{trig}")
+            compatible = "✓" if not target_base or not item.get("base") or item.get("base") == target_base else "⚠不兼容"
+            self.lora_selected_list.insert(
+                "end", f"[{state}] {compatible} {item['name']}｜{strength}｜{trig}")
+        self._update_advanced_status()
 
     def _lora_context(self):
         active = [x for x in self.selected_loras if x.get("enabled", True)]
@@ -2006,6 +2167,18 @@ class PromptWorkbench:
             mode = "SFW" if not self.settings.get("nsfw", False) else "NSFW"
         self.mode.set(mode)
         self._update_mode_button()
+        self.advanced_seed_var.set(str(self.settings.get("advanced_seed", "0")))
+        self.advanced_steps_var.set(str(self.settings.get("advanced_steps", "")))
+        self.advanced_cfg_var.set(str(self.settings.get("advanced_cfg", "")))
+        self.advanced_sampler_var.set(str(self.settings.get("advanced_sampler", "")))
+        self.advanced_scheduler_var.set(str(self.settings.get("advanced_scheduler", "")))
+        self.advanced_width_var.set(str(self.settings.get("advanced_width", "")))
+        self.advanced_height_var.set(str(self.settings.get("advanced_height", "")))
+        self.advanced_params_open.set(bool(self.settings.get("advanced_params_open", True)))
+        self.advanced_guide_seen = bool(self.settings.get("advanced_guide_seen", False))
+        self._last_generated_seed = self.settings.get("last_seed")
+        last_seed = self._last_generated_seed if self._last_generated_seed is not None else "—"
+        self.last_seed_text.set(f"本次实际 seed：{last_seed}")
         self._link_done = False
         self._on_target_change(False)
         self._refresh_top_workflows()
@@ -2030,6 +2203,14 @@ class PromptWorkbench:
         self._refresh_top_workflows()
         self._on_model_change()
 
+    def _update_prompt_counts(self):
+        if not hasattr(self, "positive_text") or not hasattr(self, "positive_count"):
+            return
+        pos = self.positive_text.get("1.0", "end").strip()
+        neg = self.negative_text.get("1.0", "end").strip()
+        self.positive_count.configure(text=f"{len(pos)} 字符")
+        self.negative_count.configure(text=f"{len(neg)} 字符")
+
     def _save_settings(self):
         save_json(SETTINGS_FILE, {
             "model": self.model_var.get(),
@@ -2046,6 +2227,16 @@ class PromptWorkbench:
             "beginner_ratio": self.beginner_ratio.get(),
             "beginner_count": int(self.beginner_count_var.get() or 1),
             "civitai_guide_seen": bool(getattr(self, "civitai_guide_seen", False)),
+            "advanced_seed": self.advanced_seed_var.get().strip(),
+            "advanced_steps": self.advanced_steps_var.get().strip(),
+            "advanced_cfg": self.advanced_cfg_var.get().strip(),
+            "advanced_sampler": self.advanced_sampler_var.get().strip(),
+            "advanced_scheduler": self.advanced_scheduler_var.get().strip(),
+            "advanced_width": self.advanced_width_var.get().strip(),
+            "advanced_height": self.advanced_height_var.get().strip(),
+            "advanced_params_open": bool(self.advanced_params_open.get()),
+            "advanced_guide_seen": bool(self.advanced_guide_seen),
+            "last_seed": self._last_generated_seed,
         })
 
     def _sync_generation_workflow(self):
@@ -2175,6 +2366,16 @@ class PromptWorkbench:
         self._on_generation_workflow_change()
         self._save_settings()
         self.status_var.set(f"已导入工作流：{name}（{imp['base']}，LoRA {len(imp['loras'])}）")
+        messagebox.showinfo(
+            APP_NAME,
+            "工作流校验通过\n\n"
+            f"格式：{imp['format']}\n"
+            f"节点：{imp['node_count']}\n"
+            f"底模：{imp['base']}\n"
+            f"LoRA：{len(imp['loras'])}\n\n"
+            "只验证了 API 结构与提示词节点；自定义节点和模型文件是否存在，"
+            "仍需在 ComfyUI 里实际跑一遍确认。",
+            parent=self.root)
 
     def _on_model_change(self):
         self._save_settings()
@@ -2198,6 +2399,7 @@ class PromptWorkbench:
             if getattr(self, "all_lora_files", None):
                 self._filter_loras()
         self._update_target_desc()
+        self._update_advanced_status()
         self._save_settings()
 
     def toggle_mode(self):
@@ -2206,6 +2408,7 @@ class PromptWorkbench:
         idx = order.index(mode) if mode in order else 0
         self.mode.set(order[(idx + 1) % len(order)])
         self._update_mode_button()
+        self._update_advanced_status()
         self._save_settings()
 
     def _update_mode_button(self):
@@ -2242,8 +2445,12 @@ class PromptWorkbench:
         shortage = bool(vram and need and need > vram)
         if shortage:
             suffix = f" · ⚠ 显存偏低（约需 {need / 1024:.0f}GB）"
+        if self.mode.get() == "NSFW":
+            rating_text = f"NSFW：{rating['nsfw']}"
+        else:
+            rating_text = f"SFW：{rating['sfw']}"
         self.beginner_base_label.configure(
-            text=f"SFW：{rating['sfw']}  ·  NSFW：{rating['nsfw']}{suffix}",
+            text=f"{rating_text}{suffix}",
             fg=COLORS["red"] if shortage else COLORS["accent2"])
 
     def _recommended_beginner_base(self):
@@ -2328,6 +2535,54 @@ class PromptWorkbench:
     def _beginner_missing(self):
         base = self._beginner_base()
         return model_center.missing_profile_files(CFG, base["workflow"], wbgen.MODEL_FILES)
+
+    def _check_models(self):
+        base = self._beginner_base()
+        missing = self._beginner_missing()
+        files = (wbgen.MODEL_FILES.get(base["workflow"]) or {})
+        empty = []
+        for role, key in (("checkpoint", "ckpt_name"), ("unet", "unet_name"),
+                          ("clip", "clip_name"), ("vae", "vae_name")):
+            filename = files.get(key)
+            if not filename:
+                continue
+            try:
+                path = model_center.find_model_file(CFG, role, filename)
+                if path and Path(path).exists() and Path(path).stat().st_size == 0:
+                    empty.append(filename)
+            except Exception:
+                pass
+        lines = [f"底模：{base['label']}"]
+        lines.append("缺失：" + ("、".join(x["filename"] for x in missing) if missing else "无"))
+        lines.append("空文件：" + ("、".join(empty) if empty else "无"))
+        if not missing and not empty:
+            lines.append("状态：配置文件和实际文件都存在，可以出图。")
+        else:
+            lines.append("状态：先补齐/重新下载上述文件，再用“复制 DSH 提示词”排查。")
+        top = tk.Toplevel(self.root)
+        top.title("模型完整性检查")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 640, 330)
+        top.transient(self.root)
+        tk.Label(top, text="模型完整性检查", bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 15, "bold")).pack(anchor="w", padx=20, pady=(16, 4))
+        box = tk.Text(top, height=7, bg=COLORS["input"], fg=COLORS["text"], relief="flat",
+                      bd=0, wrap="word", font=("Microsoft YaHei UI", 10))
+        box.pack(fill="both", expand=True, padx=20, pady=(0, 8))
+        box.insert("1.0", "\n".join(lines))
+        box.configure(state="disabled")
+        row = tk.Frame(top, bg=COLORS["bg"])
+        row.pack(fill="x", padx=20, pady=(0, 14))
+        def copy_check():
+            prompt = "请检查本地出图工作台的模型完整性：\n" + "\n".join(lines) + \
+                     f"\nComfyUI：{CFG.get('comfy_url')}\n模型文件配置：{files}"
+            self.root.clipboard_clear()
+            self.root.clipboard_append(prompt)
+            self.root.update_idletasks()
+            self.status_var.set("模型检查提示词已复制")
+        for text, cmd in (("复制 DSH 提示词", copy_check), ("关闭", top.destroy)):
+            tk.Button(row, text=text, command=cmd, bg=COLORS["card2"], fg=COLORS["text"],
+                      relief="flat", bd=0, padx=12, pady=6, cursor="hand2").pack(side="left", padx=(0, 6))
 
     def _refresh_beginner_missing(self):
         if not hasattr(self, "beginner_missing_frame"):
@@ -2464,9 +2719,9 @@ class PromptWorkbench:
                     comfy_text = "ComfyUI ✓" if comfy_ok else f"ComfyUI HTTP {r.status}"
             except Exception:
                 if close_after:
-                    comfy_text = "ComfyUI ○ 按需启动"
+                    comfy_text = "ComfyUI ○ 未启动 · 出图时自动启动"
                 else:
-                    comfy_text = "ComfyUI ✕ 未启动"
+                    comfy_text = "ComfyUI ✕ 未启动 · 请手动启动"
             self.env_queue.put((llm_text, llm_ok, comfy_text, comfy_ok))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -2481,12 +2736,58 @@ class PromptWorkbench:
         self._env_check_running = False
         self.beginner_llm_status.configure(text=llm_text,
                                            fg=COLORS["green"] if llm_ok else COLORS["red"])
-        comfy_fg = COLORS["green"] if comfy_ok else (
-            COLORS["muted"] if "按需启动" in comfy_text else COLORS["red"])
+        if self.generating:
+            comfy_text, comfy_fg = "ComfyUI ✓ 出图中", COLORS["green"]
+        else:
+            comfy_fg = COLORS["green"] if comfy_ok else (
+                COLORS["muted"] if "自动启动" in comfy_text else COLORS["red"])
         self.beginner_comfy_status.configure(text=comfy_text, fg=comfy_fg)
         self.beginner_prepare_btn.configure(state="normal", text="一键准备")
         self._refresh_beginner_model_status()
+        self._update_advanced_status()
         APP_LOG.info("环境状态: %s / %s", llm_text, comfy_text)
+
+    def _start_comfy_ui(self):
+        if self.generating:
+            messagebox.showinfo(APP_NAME, "正在出图，不能同时启动 ComfyUI。")
+            return
+        self.beginner_comfy_start_btn.configure(state="disabled", text="启动中…")
+        self.beginner_comfy_stop_btn.configure(state="disabled")
+        self.beginner_comfy_status.configure(text="ComfyUI … 启动中", fg=COLORS["muted"])
+        self.status_var.set("正在启动 ComfyUI…")
+
+        def worker():
+            err = ""
+            try:
+                wbgen.ensure_comfy()
+            except Exception as e:
+                err = str(e)
+            self.root.after(0, lambda: self._finish_comfy_action(err, "启动"))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _stop_comfy_ui(self):
+        if self.generating:
+            messagebox.showinfo(APP_NAME, "正在出图，不能停止 ComfyUI。")
+            return
+        self.beginner_comfy_stop_btn.configure(state="disabled", text="停止中…")
+        self.beginner_comfy_start_btn.configure(state="disabled")
+        self.beginner_comfy_status.configure(text="ComfyUI … 停止中", fg=COLORS["muted"])
+        self.status_var.set("正在停止 ComfyUI…")
+
+        def worker():
+            err = ""
+            try:
+                wbgen.close_comfy()
+            except Exception as e:
+                err = str(e)
+            self.root.after(0, lambda: self._finish_comfy_action(err, "停止"))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _finish_comfy_action(self, err, action):
+        self.beginner_comfy_start_btn.configure(state="normal", text="启动 ComfyUI")
+        self.beginner_comfy_stop_btn.configure(state="normal", text="停止 ComfyUI")
+        self.status_var.set(f"ComfyUI {action}完成" if not err else f"ComfyUI {action}失败：{err[:80]}")
+        self._refresh_beginner_env()
 
     def _beginner_prepare_all(self):
         if self._env_check_running:
@@ -2518,9 +2819,9 @@ class PromptWorkbench:
                     comfy_text = "ComfyUI ✓" if comfy_ok else f"ComfyUI HTTP {r.status}"
             except Exception:
                 if close_after:
-                    comfy_text = "ComfyUI ○ 按需启动"
+                    comfy_text = "ComfyUI ○ 未启动 · 出图时自动启动"
                 else:
-                    comfy_text = "ComfyUI ✕ " + (comfy_error[:50] if comfy_error else "未启动")
+                    comfy_text = "ComfyUI ✕ 未启动 · 请手动启动"
             self.env_queue.put((llm_text, llm_ok, comfy_text, comfy_ok))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -2657,6 +2958,10 @@ class PromptWorkbench:
         tk.Button(query_row, text="搜索角色 LoRA", command=lambda: do_search(),
                   bg=COLORS["accent"], fg="#fff", relief="flat", bd=0,
                   padx=12, pady=5, cursor="hand2").pack(side="left")
+        tk.Button(query_row, text="浏览器挑选",
+                  command=lambda: self.open_civitai_browser(query_var.get()),
+                  bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
+                  padx=10, pady=5, cursor="hand2").pack(side="left", padx=(6, 0))
         status = tk.Label(top, text="输入角色名，优先英文/罗马音，例如 2B、Raiden Shogun、Frieren。",
                           bg=COLORS["bg"], fg=COLORS["muted"], font=FONT_SMALL, anchor="w")
         status.pack(fill="x", padx=20, pady=(0, 4))
@@ -2684,9 +2989,6 @@ class PromptWorkbench:
                                 bg=COLORS["accent"], fg="#fff", relief="flat", bd=0,
                                 padx=12, pady=5, cursor="hand2")
         install_btn.pack(side="right")
-        tk.Button(bar, text="浏览器挑选", command=lambda: self.open_civitai_browser(query_var.get()),
-                  bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
-                  padx=10, pady=5, cursor="hand2").pack(side="right", padx=(0, 6))
         cancel_event = threading.Event()
         cancel_btn = tk.Button(bar, text="取消", state="disabled",
                                bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
@@ -3365,9 +3667,142 @@ LoRA 目标目录：{lora_root}
             else:
                 btn.configure(bg=COLORS["card2"], fg=COLORS["text"], activebackground=COLORS["card2"])
 
+    def _advanced_params(self):
+        def _int_or_none(var, low=None, high=None):
+            try:
+                value = int(str(var.get()).strip())
+                if low is not None:
+                    value = max(low, value)
+                if high is not None:
+                    value = min(high, value)
+                return value
+            except (TypeError, ValueError):
+                return None
+        seed = _int_or_none(self.advanced_seed_var, 0, 2**31 - 1) or 0
+        params = {"seed": seed}
+        for key, var in (("steps", self.advanced_steps_var), ("cfg", self.advanced_cfg_var),
+                         ("width", self.advanced_width_var), ("height", self.advanced_height_var)):
+            value = str(var.get()).strip()
+            if value:
+                params[key] = value
+        for key, var in (("sampler", self.advanced_sampler_var),
+                         ("scheduler", self.advanced_scheduler_var)):
+            value = str(var.get()).strip()
+            if value:
+                params[key] = value
+        return params
+
+    def _toggle_advanced_params(self):
+        self.advanced_params_open.set(not self.advanced_params_open.get())
+        if self.advanced_params_open.get():
+            self.advanced_params_frame.pack(fill="x", padx=16, pady=(0, 8))
+            self.advanced_params_toggle.configure(text="收起生成参数")
+        else:
+            self.advanced_params_frame.pack_forget()
+            self.advanced_params_toggle.configure(text="展开生成参数")
+        self._save_settings()
+
+    def _reset_advanced_params(self):
+        self.advanced_seed_var.set("0")
+        for var in (self.advanced_steps_var, self.advanced_cfg_var, self.advanced_sampler_var,
+                    self.advanced_scheduler_var, self.advanced_width_var, self.advanced_height_var):
+            var.set("")
+        self.status_var.set("生成参数已恢复工作流默认")
+        self._save_settings()
+
+    def _lock_last_seed(self):
+        seed = self._last_generated_seed
+        if seed in (None, ""):
+            self.status_var.set("还没有生成记录，无法固定 seed")
+            return
+        self.advanced_seed_var.set(str(seed))
+        self._save_settings()
+        self.status_var.set(f"已固定 seed：{seed}")
+
+    def _set_last_seed(self, seed):
+        if seed in (None, ""):
+            return
+        try:
+            seed = int(seed)
+        except (TypeError, ValueError):
+            return
+        self._last_generated_seed = seed
+        self.last_seed_text.set(f"本次实际 seed：{seed}")
+        self._save_settings()
+
+    def _update_advanced_status(self):
+        if not hasattr(self, "advanced_status"):
+            return
+        key = wbgen.workflow_for_target(self.target_var.get())
+        base_spec = wbgen.WORKFLOWS.get(key) or {}
+        missing = model_center.missing_profile_files(CFG, key, wbgen.MODEL_FILES)
+        lora_base = base_spec.get("base", "")
+        incompatible = 0
+        for lora in getattr(self, "selected_loras", []):
+            try:
+                if lora.get("base") and lora.get("base") != lora_base:
+                    incompatible += 1
+            except Exception:
+                pass
+        comfy = ""
+        try:
+            comfy = self.beginner_comfy_status.cget("text")
+        except Exception:
+            pass
+        parts = [f"底模 {'✓' if not missing else '缺 ' + str(len(missing))}"]
+        parts.append(f"LoRA {'✓' if not incompatible else '不兼容 ' + str(incompatible)}")
+        if comfy:
+            parts.append(comfy)
+        self.advanced_status.configure(
+            text="  ·  ".join(parts),
+            fg=COLORS["red"] if (missing or incompatible) else COLORS["muted"])
+        return missing, incompatible
+
+    def _show_advanced_guide(self):
+        if self._dialog_already_open("advanced_guide_dialog"):
+            return
+        top = tk.Toplevel(self.root)
+        self.advanced_guide_dialog = top
+        top.title("高级模式 · 快速说明")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 620, 430)
+        top.transient(self.root)
+        tk.Label(top, text="高级模式怎么用", bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=20, pady=(16, 4))
+        lines = [
+            "1. 顶部选 LLM、底模、工作流；缺模型会显示在就绪状态条。",
+            "2. 左侧写需求、继续调整提示词；右侧编辑正向/负向并出图。",
+            "3. LoRA 按底模筛选；加入后可看强度、启用/旁路。",
+            "4. 生成参数留空就用工作流默认；改了只影响内置工作流。",
+            "5. 失败时点错误面板里的“复制 DSH 提示词”即可排查。",
+        ]
+        box = tk.Label(top, text="\n".join(lines), bg=COLORS["bg"], fg=COLORS["text"],
+                       justify="left", anchor="w", wraplength=570,
+                       font=("Microsoft YaHei UI", 10))
+        box.pack(fill="both", expand=True, padx=20, pady=(4, 8))
+        def close_guide():
+            self.advanced_guide_seen = True
+            self._save_settings()
+            top.destroy()
+            self.advanced_guide_dialog = None
+        tk.Button(top, text="知道了，开始使用", command=close_guide, bg=COLORS["accent"],
+                  fg="#fff", relief="flat", bd=0, padx=14, pady=6,
+                  cursor="hand2").pack(anchor="e", padx=20, pady=(0, 14))
+        top.protocol("WM_DELETE_WINDOW", close_guide)
+
+    def _maybe_advanced_guide(self):
+        if self.advanced_guide_seen or self.beginner_mode_var.get():
+            return
+        self.advanced_guide_seen = True
+        self._save_settings()
+        self.root.after(180, self._show_advanced_guide)
+
     def toggle_beginner_mode(self):
-        self.beginner_mode_var.set(not self.beginner_mode_var.get())
+        was_beginner = self.beginner_mode_var.get()
+        self.beginner_mode_var.set(not was_beginner)
         self._apply_beginner_mode(save=True)
+        if was_beginner and not self.beginner_mode_var.get():
+            self._maybe_advanced_guide()
 
     def _apply_beginner_mode(self, save=False):
         beginner = bool(self.beginner_mode_var.get())
@@ -3390,6 +3825,8 @@ LoRA 目标目录：{lora_root}
         self._draw_mode_switch(animate=True)
         self._update_mode_button()
         self._refresh_beginner_missing()
+        if not beginner:
+            self._update_advanced_status()
         if save:
             self._save_settings()
 
@@ -3468,11 +3905,16 @@ LoRA 目标目录：{lora_root}
                     "现在直接生成很可能失败。\n仍要尝试吗？"):
                 return
         brief = self.beginner_brief.get("1.0", "end").strip()
-        if not brief or brief.startswith("例如："):
+        if not brief:
             brief = random.choice(RANDOM_PROMPTS)
             self.beginner_brief.delete("1.0", "end")
             self.beginner_brief.insert("1.0", brief)
             self.status_var.set("已随机填入提示词，正在生成…")
+        elif brief.startswith("例如："):
+            brief = brief[len("例如："):].strip() or BEGINNER_DEFAULT_PROMPT
+            self.beginner_brief.delete("1.0", "end")
+            self.beginner_brief.insert("1.0", brief)
+            self.status_var.set("已使用示例画面，正在生成…")
         style = self.beginner_style.get()
         if style and style != "无风格":
             brief += f"\n画面风格：{style}"
@@ -3481,8 +3923,11 @@ LoRA 目标目录：{lora_root}
         self.brief_text.insert("1.0", brief)
         self.beginner_pending = True
         self.gen_cancel.clear()
+        self.gen_stop_after.clear()
         if hasattr(self, "beginner_stop_btn"):
             self.beginner_stop_btn.configure(state="normal", text="停止")
+        if hasattr(self, "beginner_stop_after_btn"):
+            self.beginner_stop_after_btn.configure(state="normal", text="停止后续")
         if hasattr(self, "beginner_repeat_btn"):
             self.beginner_repeat_btn.configure(state="disabled")
             self.beginner_result_hint.configure(text="生成完成后可在这里继续操作")
@@ -3490,6 +3935,64 @@ LoRA 目标目录：{lora_root}
         self.beginner_progressbar.configure(maximum=2, value=0)
         self.beginner_generate_btn.configure(state="disabled", text="正在写提示词…")
         self.generate()
+
+    def _favorites(self):
+        data = load_json(FAVORITES_FILE, [])
+        return data if isinstance(data, list) else []
+
+    def _favorite_prompt(self):
+        text = self.beginner_brief.get("1.0", "end").strip()
+        if not text or text.startswith("例如："):
+            messagebox.showinfo(APP_NAME, "先写一句提示词，再收藏。")
+            return
+        items = self._favorites()
+        if text not in items:
+            items.insert(0, text)
+            save_json(FAVORITES_FILE, items[:200])
+            self.status_var.set("已收藏提示词")
+        else:
+            self.status_var.set("这条已经收藏过了")
+
+    def _open_favorites(self):
+        top = tk.Toplevel(self.root)
+        top.title("提示词收藏夹")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 620, 420)
+        top.transient(self.root)
+        tk.Label(top, text="提示词收藏夹", bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 15, "bold")).pack(anchor="w", padx=20, pady=(16, 4))
+        tk.Label(top, text="双击填入；收藏也支持随时删除。", bg=COLORS["bg"],
+                 fg=COLORS["muted"], font=FONT_SMALL).pack(anchor="w", padx=20, pady=(0, 8))
+        box = tk.Listbox(top, bg=COLORS["input"], fg=COLORS["text"], relief="flat", bd=0,
+                         selectbackground=COLORS["accent"], selectforeground="#fff",
+                         font=("Microsoft YaHei UI", 10))
+        box.pack(fill="both", expand=True, padx=20, pady=(0, 8))
+        items = self._favorites()
+        for item in items:
+            box.insert("end", item)
+        def use_item(event=None):
+            sel = box.curselection()
+            if not sel:
+                return
+            self.beginner_brief.delete("1.0", "end")
+            self.beginner_brief.insert("1.0", items[sel[0]])
+            top.destroy()
+            self.status_var.set("已填入收藏的提示词")
+        def delete_item():
+            sel = box.curselection()
+            if not sel:
+                return
+            idx = sel[0]
+            del items[idx]
+            save_json(FAVORITES_FILE, items)
+            box.delete(idx)
+            self.status_var.set("已删除收藏")
+        box.bind("<Double-Button-1>", use_item)
+        row = tk.Frame(top, bg=COLORS["bg"])
+        row.pack(fill="x", padx=20, pady=(0, 14))
+        for text, cmd in (("填入", use_item), ("删除", delete_item), ("关闭", top.destroy)):
+            tk.Button(row, text=text, command=cmd, bg=COLORS["card2"], fg=COLORS["text"],
+                      relief="flat", bd=0, padx=12, pady=5, cursor="hand2").pack(side="left", padx=(0, 6))
 
     def _beginner_random_prompt(self):
         current = self.beginner_brief.get("1.0", "end").strip()
@@ -3533,6 +4036,13 @@ LoRA 目标目录：{lora_root}
             else:
                 btn.configure(bg=COLORS["card2"], fg=COLORS["text"], activebackground=COLORS["card2"])
         self._save_settings()
+
+    def _stop_after(self):
+        if not self.generating:
+            return
+        self.gen_stop_after.set()
+        self.beginner_stop_after_btn.configure(state="disabled", text="当前张后停止")
+        self.status_var.set("已请求停止后续；当前这张完成后停止")
 
     def stop_beginner_generation(self):
         if not self.generating:
@@ -3947,6 +4457,8 @@ LoRA 目标目录：{lora_root}
             "notes": notes,
             "raw": raw,
             "loras": list(self.selected_loras),
+            "seed": self._last_generated_seed,
+            "images": list(getattr(self, "result_paths", [])),
         }
         self.records.insert(0, rec)
         self.records = self.records[:80]
@@ -3963,6 +4475,8 @@ LoRA 目标目录：{lora_root}
 - 目标：{rec['target']}
 - 模型：{rec['model']}
 - 模式：{rec.get('mode', 'NSFW' if rec.get('nsfw') else 'SFW')}
+- Seed：{rec.get('seed', '未记录')}
+- 图片：{'; '.join(rec.get('images', [])) or '未记录'}
 - LoRA：{'; '.join(x.get('name','') + ' [' + (x.get('trigger') or '无触发词') + ']' for x in rec.get('loras', [])) or '未选择'}
 
 ## 原始需求
@@ -4177,11 +4691,16 @@ LoRA 目标目录：{lora_root}
         close_after = bool(self.gen_close_var.get())
         self.generating = True
         self.gen_cancel.clear()
+        self.gen_stop_after.clear()
+        if hasattr(self, "beginner_stop_after_btn"):
+            self.beginner_stop_after_btn.configure(state="normal", text="停止后续")
         APP_LOG.info("开始出图 workflow=%s count=%s ratio=%s auto_lora=%s",
                      wf.get("label"), count, self.beginner_ratio.get() if self.beginner_mode_var.get() else "advanced",
                      bool(self.auto_pick_var.get()))
         if hasattr(self, "beginner_stop_btn"):
             self.beginner_stop_btn.configure(state="normal", text="停止")
+        if hasattr(self, "beginner_comfy_status"):
+            self.beginner_comfy_status.configure(text="ComfyUI ✓ 出图中", fg=COLORS["green"])
         if hasattr(self, "beginner_repeat_btn"):
             self.beginner_repeat_btn.configure(state="disabled")
             self.beginner_result_hint.configure(text="正在生成…")
@@ -4197,19 +4716,22 @@ LoRA 目标目录：{lora_root}
         width = height = None
         if self.beginner_mode_var.get():
             width, height = BEGINNER_RATIOS.get(self.beginner_ratio.get(), BEGINNER_RATIOS["竖图"])
+        params = self._advanced_params()
+        self._save_settings()
         threading.Thread(target=self._gen_worker,
                          args=(wf, positive, negative, count, close_after, str(self.output_dir),
                                bool(self.auto_pick_var.get()), selected_snapshot, model_id,
-                               width, height),
+                               width, height, params),
                          daemon=True).start()
         self.root.after(300, self._poll_gen_queue)
 
     def _gen_worker(self, wf, positive, negative, count, close_after, out_dir,
                     auto_pick=False, selected_loras=None, model_id=None,
-                    width=None, height=None):
+                    width=None, height=None, params=None):
         all_images = []
         summary = None
         plan = None
+        last_seed = None
         was_up = wbgen.comfy_is_up()
         active_loras = list(selected_loras or [])
         try:
@@ -4249,16 +4771,28 @@ LoRA 目标目录：{lora_root}
                     result = wbgen.generate_imported(wf["path"], positive, negative, 1, False, out_dir)
                 else:
                     comp, _ = wbgen.compatible_loras(wf["key"], active_loras)
+                    image_params = dict(params or {})
+                    try:
+                        base_seed = int(image_params.get("seed") or 0)
+                    except (TypeError, ValueError):
+                        base_seed = 0
+                    if base_seed and count > 1:
+                        image_params["seed"] = base_seed + i
                     result = wbgen.generate(wf["key"], positive, negative, comp, 1, False, out_dir,
-                                            width=width, height=height)
+                                            width=width, height=height, params=image_params)
                 summary = result.get("lora_plan_summary") or summary
                 plan = result.get("lora_plan") or plan
                 all_images.extend(result.get("images", []))
-                self.gen_queue.put(("progress", i + 1, count, list(all_images), summary, plan))
-            self.gen_queue.put(("done", all_images, summary, plan))
+                if result.get("seed") not in (None, ""):
+                    last_seed = result.get("seed")
+                self.gen_queue.put(("progress", i + 1, count, list(all_images), summary, plan, last_seed))
+                if self.gen_stop_after.is_set():
+                    self.gen_queue.put(("notice", "已按要求停止后续张数"))
+                    break
+            self.gen_queue.put(("done", all_images, summary, plan, last_seed))
         except Exception as e:
             if self.gen_cancel.is_set():
-                self.gen_queue.put(("done", all_images, summary, plan))
+                self.gen_queue.put(("done", all_images, summary, plan, last_seed))
             else:
                 self.gen_queue.put(("err", str(e)))
         finally:
@@ -4307,12 +4841,15 @@ LoRA 目标目录：{lora_root}
             self.result_progress.configure(text=f"第 {idx} 张生成中 · 已出 {done}/{count}")
             self.result_progressbar.configure(maximum=count, value=done)
             self.status_var.set(f"第 {idx} 张生成中 · 已出 {done}/{count}")
+            if hasattr(self, "beginner_comfy_status"):
+                self.beginner_comfy_status.configure(text="ComfyUI ✓ 出图中", fg=COLORS["green"])
             self._beginner_set_progress(f"第 {idx} 张生成中 · 已出 {done}/{count}", done, count)
             self.beginner_generate_btn.configure(text=f"出图中 · 已出 {done}/{count}")
             self.root.after(250, self._poll_gen_queue)
             return
         if kind == "progress":
-            _, idx, count, images, summary, plan = msg
+            _, idx, count, images, summary, plan, seed = msg
+            self._set_last_seed(seed)
             self._show_results(images)
             self._show_beginner_results(images)
             done = len(images)
@@ -4320,6 +4857,8 @@ LoRA 目标目录：{lora_root}
             self.result_progress.configure(text=f"已出 {done}/{count}")
             self.result_progressbar.configure(maximum=count, value=done)
             self.status_var.set(f"已出 {done}/{count}")
+            if hasattr(self, "beginner_comfy_status"):
+                self.beginner_comfy_status.configure(text="ComfyUI ✓ 出图中", fg=COLORS["green"])
             self._beginner_set_progress(f"已出 {done}/{count}", done, count)
             self.beginner_generate_btn.configure(text=f"出图中 · 已出 {done}/{count}")
             self.root.after(250, self._poll_gen_queue)
@@ -4328,12 +4867,15 @@ LoRA 目标目录：{lora_root}
         self.gen_btn.configure(state="normal", text="生成并出图")
         if hasattr(self, "beginner_stop_btn"):
             self.beginner_stop_btn.configure(state="disabled", text="停止")
+        if hasattr(self, "beginner_stop_after_btn"):
+            self.beginner_stop_after_btn.configure(state="disabled", text="停止后续")
         if hasattr(self, "beginner_generate_btn"):
             self.beginner_generate_btn.configure(state="normal", text="开始生成")
         stopped = self.gen_cancel.is_set()
         self.gen_cancel.clear()
         if kind == "done":
-            _, images, summary, plan = msg
+            _, images, summary, plan, seed = msg
+            self._set_last_seed(seed)
             self._show_results(images)
             self._show_beginner_results(images)
             if stopped and not images:
@@ -4367,8 +4909,47 @@ LoRA 目标目录：{lora_root}
             self.beginner_result_hint.configure(text="出图失败")
             self.status_var.set("出图失败")
             APP_LOG.error("出图失败: %s", msg[1])
-            messagebox.showerror(APP_NAME, humanize_error(msg[1]))
+            self._show_generation_error(str(msg[1]))
         self._schedule_env_refresh()
+
+    def compare_recent_results(self):
+        paths = [str(p) for p in getattr(self, "result_paths", []) if Path(str(p)).exists()]
+        if len(paths) < 2:
+            messagebox.showinfo(APP_NAME, "至少生成两张结果后才能对比。")
+            return
+        if PILImage is None or PILImageTk is None:
+            messagebox.showerror(APP_NAME, "缺少 Pillow，无法预览对比。")
+            return
+        top = tk.Toplevel(self.root)
+        top.title("结果对比 · 最近两张")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 980, 700)
+        top.transient(self.root)
+        tk.Label(top, text="最近两张结果对比", bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 15, "bold")).pack(anchor="w", padx=18, pady=(14, 6))
+        grid = tk.Frame(top, bg=COLORS["bg"])
+        grid.pack(fill="both", expand=True, padx=18, pady=(0, 8))
+        refs = []
+        for i, path in enumerate(paths[-2:]):
+            cell = tk.Frame(grid, bg=COLORS["panel"], highlightbackground=COLORS["line"],
+                            highlightthickness=1)
+            cell.grid(row=0, column=i, sticky="nsew", padx=(0, 8) if i == 0 else (0, 0))
+            grid.grid_columnconfigure(i, weight=1)
+            try:
+                img = PILImage.open(path).convert("RGB")
+                img.thumbnail((440, 560))
+                photo = PILImageTk.PhotoImage(img)
+                refs.append(photo)
+                tk.Label(cell, image=photo, bg=COLORS["panel"]).pack(padx=6, pady=6)
+            except Exception as e:
+                tk.Label(cell, text=f"无法预览\n{e}", bg=COLORS["panel"], fg=COLORS["red"]).pack(
+                    padx=6, pady=6)
+            tk.Label(cell, text=Path(path).name, bg=COLORS["panel"], fg=COLORS["muted"],
+                     font=("Microsoft YaHei UI", 8), wraplength=420).pack(padx=6, pady=(0, 4))
+            tk.Button(cell, text="打开原图", command=lambda p=path: os.startfile(p),
+                      bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
+                      padx=8, pady=3, cursor="hand2").pack(pady=(0, 8))
+        top._compare_refs = refs
 
     def _show_results(self, paths):
         paths = sorted(paths, key=lambda p: Path(p).name)
@@ -5079,9 +5660,13 @@ LoRA 目标目录：{lora_root}
         behavior.pack(fill="x", pady=(10, 2))
         tk.Label(behavior, text="关闭窗口时", width=13, anchor="w", bg=COLORS["panel"],
                  fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
-        close_var = tk.StringVar(value=str(CFG.get("close_action", "minimize") or "minimize"))
+        close_var = tk.StringVar(value=str(CFG.get("close_action", "tray") or "tray"))
         fields["close_action"] = close_var
-        tk.Radiobutton(behavior, text="最小化（推荐，生成不中断）", variable=close_var,
+        tk.Radiobutton(behavior, text="最小化到托盘（推荐）", variable=close_var,
+                       value="tray", bg=COLORS["panel"], fg=COLORS["text"],
+                       activebackground=COLORS["panel"], selectcolor=COLORS["input"],
+                       font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 8))
+        tk.Radiobutton(behavior, text="任务栏", variable=close_var,
                        value="minimize", bg=COLORS["panel"], fg=COLORS["text"],
                        activebackground=COLORS["panel"], selectcolor=COLORS["input"],
                        font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 8))
@@ -5457,6 +6042,16 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
                   fg=COLORS["muted"], relief="flat", bd=0, padx=10, pady=5,
                   cursor="hand2").pack(side="right")
 
+    def open_changelog(self):
+        path = APP_DIR / "CHANGELOG.md"
+        if not path.exists():
+            messagebox.showinfo(APP_NAME, "当前构建没有附带更新日志。")
+            return
+        try:
+            os.startfile(str(path))
+        except Exception as e:
+            messagebox.showerror(APP_NAME, str(e))
+
     def check_updates(self):
         if getattr(self, "_update_checking", False):
             return
@@ -5616,16 +6211,17 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         row("comfy_close_script", "ComfyUI 关闭脚本", "file")
         row("comfy_workflows_dir", "工作流目录", "dir")
         row("tool80_path", "8.0 精修 HTML（可选）", "file")
+        row("ui_scale", "界面缩放（重启生效）", width=8)
 
         behavior = tk.Frame(form, bg=COLORS["panel"])
         behavior.pack(fill="x", padx=12, pady=(10, 4))
         tk.Label(behavior, text="关闭窗口时", width=13, anchor="w", bg=COLORS["panel"],
                  fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
-        close_var = tk.StringVar(value=str(CFG.get("close_action", "minimize") or "minimize"))
+        close_var = tk.StringVar(value=str(CFG.get("close_action", "tray") or "tray"))
         vars_["close_action"] = close_var
         ttk.Combobox(behavior, textvariable=close_var, width=12, state="readonly",
-                     values=("minimize", "exit")).pack(side="left", padx=(0, 8))
-        tk.Label(behavior, text="minimize = 最小化；exit = 退出",
+                     values=("tray", "minimize", "exit")).pack(side="left", padx=(0, 8))
+        tk.Label(behavior, text="tray = 托盘；minimize = 任务栏；exit = 退出",
                  bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 9)).pack(side="left")
 
@@ -5642,6 +6238,25 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         tk.Label(idle, text="分钟不用 LLM 后卸载 Ollama 显存；0 = 不卸载",
                  bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        guides = tk.Frame(form, bg=COLORS["panel"])
+        guides.pack(fill="x", padx=12, pady=(8, 4))
+        tk.Label(guides, text="引导", width=13, anchor="w", bg=COLORS["panel"],
+                 fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
+
+        def replay_guide(callback):
+            self.settings_dialog = None
+            top.destroy()
+            self.root.after(120, callback)
+
+        tk.Button(guides, text="重看简洁模式引导",
+                  command=lambda: replay_guide(self.open_first_run_wizard),
+                  bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
+                  padx=10, pady=4, cursor="hand2").pack(side="left", padx=(0, 6))
+        tk.Button(guides, text="重看高级模式引导",
+                  command=lambda: replay_guide(self._show_advanced_guide),
+                  bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
+                  padx=10, pady=4, cursor="hand2").pack(side="left")
 
         status = tk.Label(top, text="", bg=COLORS["bg"], fg=COLORS["muted"],
                           font=FONT_SMALL, anchor="w")
@@ -5847,6 +6462,99 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         self.refine_entry.delete(0, "end")
         self.status_var.set("已清空")
 
+    def _show_generation_error(self, raw):
+        friendly = humanize_error(raw)
+        top = tk.Toplevel(self.root)
+        top.title("出图失败 · 排错")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 760, 460)
+        top.transient(self.root)
+        tk.Label(top, text="出图失败", bg=COLORS["bg"], fg=COLORS["red"],
+                 font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=20, pady=(16, 4))
+        tk.Label(top, text=friendly, bg=COLORS["bg"], fg=COLORS["text"], justify="left",
+                 wraplength=700, font=("Microsoft YaHei UI", 10)).pack(anchor="w", padx=20, pady=(0, 8))
+        detail = tk.Text(top, height=8, bg=COLORS["input"], fg=COLORS["muted"], relief="flat",
+                         bd=0, wrap="word", font=("Consolas", 9))
+        detail.pack(fill="both", expand=True, padx=20, pady=(0, 8))
+        detail.insert("1.0", raw)
+        detail.configure(state="disabled")
+        row = tk.Frame(top, bg=COLORS["bg"])
+        row.pack(fill="x", padx=20, pady=(0, 14))
+        def copy_prompt():
+            prompt = (
+                "请诊断并修复“本地出图工作台”的出图失败问题。\n"
+                f"程序版本：{APP_VERSION}\n"
+                f"ComfyUI：{CFG.get('comfy_url')}\n"
+                f"LLM：{CFG.get('llm_base_url')} / {CFG.get('llm_model')}\n"
+                f"错误：\n{raw}\n\n"
+                f"日志：{LOG_DIR / 'app.log'}\n"
+                "请先检查 ComfyUI 端口/进程、模型文件和日志，不要删除用户数据。"
+            )
+            self.root.clipboard_clear()
+            self.root.clipboard_append(prompt)
+            self.root.update_idletasks()
+            self.status_var.set("排错提示词已复制，发给大肥鱼即可")
+        def open_log():
+            try:
+                os.startfile(str(LOG_DIR / "app.log"))
+            except Exception as e:
+                messagebox.showerror(APP_NAME, str(e), parent=top)
+        for text, cmd in (("复制 DSH 提示词", copy_prompt), ("打开日志", open_log),
+                          ("重试", lambda: (top.destroy(), self.root.after(100, self.generate_images))),
+                          ("关闭", top.destroy)):
+            tk.Button(row, text=text, command=cmd, bg=COLORS["card2"], fg=COLORS["text"],
+                      relief="flat", bd=0, padx=12, pady=6, cursor="hand2").pack(side="left", padx=(0, 6))
+
+    def _init_tray(self):
+        self.tray_icon = None
+        if pystray is None or PILImage is None:
+            return
+        try:
+            img = PILImage.open(APP_ICON).convert("RGBA")
+        except Exception:
+            img = PILImage.new("RGBA", (64, 64), (109, 93, 252, 255))
+            d = PILImageDraw.Draw(img)
+            d.rounded_rectangle((8, 8, 56, 56), radius=14, fill=(255, 255, 255, 255))
+        menu = pystray.Menu(
+            pystray.MenuItem("显示主窗口", lambda icon, item: self.tray_queue.put("show"), default=True),
+            pystray.MenuItem("退出程序", lambda icon, item: self.tray_queue.put("exit")),
+        )
+        try:
+            self.tray_icon = pystray.Icon("PromptWorkbench", img, APP_NAME, menu)
+            self.tray_icon.run_detached()
+        except Exception:
+            self.tray_icon = None
+
+    def _poll_tray_queue(self):
+        try:
+            while True:
+                action = self.tray_queue.get_nowait()
+                if action == "show":
+                    self._restore_window()
+                elif action == "exit":
+                    self._exit_app()
+                    return
+        except queue.Empty:
+            pass
+        self.root.after(200, self._poll_tray_queue)
+
+    def _restore_window(self):
+        try:
+            self.root.deiconify()
+            self.root.state("normal")
+            self.root.lift()
+            self.root.focus_force()
+        except Exception:
+            pass
+
+    def _hide_to_tray(self):
+        if self.tray_icon is not None:
+            self.root.withdraw()
+            self.status_var.set("已最小化到托盘；右键托盘图标可恢复/退出")
+        else:
+            self.root.iconify()
+            self.status_var.set("已最小化；按 Ctrl+Q 或侧栏“退出程序”可退出")
+
     def _unload_used_models(self):
         """关闭工作台时只卸载本次调用过的 Ollama 模型；云端不处理。"""
         for model in list(self.used_models):
@@ -5868,11 +6576,19 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
             save_json(HISTORY_FILE, self.records)
         finally:
             self._unload_used_models()
+            try:
+                if getattr(self, "tray_icon", None) is not None:
+                    self.tray_icon.stop()
+            except Exception:
+                pass
             self.root.destroy()
 
     def on_close(self):
-        action = str(CFG.get("close_action", "minimize") or "minimize").lower()
-        if action != "exit":
+        action = str(CFG.get("close_action", "tray") or "tray").lower()
+        if action == "tray":
+            self._hide_to_tray()
+            return
+        if action == "minimize":
             self.root.iconify()
             self.status_var.set("已最小化；按 Ctrl+Q 或侧栏“退出程序”可退出")
             return
@@ -5882,12 +6598,19 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
 def main():
     enable_dpi_awareness()
     root = tk.Tk()
+    try:
+        scale = float(CFG.get("ui_scale", 1.0) or 1.0)
+        if abs(scale - 1.0) > 0.01:
+            root.tk.call("tk", "scaling", float(root.tk.call("tk", "scaling")) * scale)
+    except Exception:
+        pass
     APP_LOG.info("启动工作台 config=%s", CFG.path)
     app = PromptWorkbench(root)
     if "--smoke" in sys.argv:
-        root.after(1200, root.destroy)
+        root.after(1200, app._exit_app)
     root.mainloop()
 
 
 if __name__ == "__main__":
     main()
+

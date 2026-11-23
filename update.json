@@ -1,7 +1,7 @@
 {
-  "version": "0.2.0-beta",
-  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.2.0-beta",
-  "notes": "首次公开发布：便携版、C 站教程、角色搜索、模型管理和首次向导。",
+  "version": "0.3.0-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.3.0-beta",
+  "notes": "0.3.0-beta：高级模式改造、托盘、ComfyUI 启停、收藏夹、错误面板、模型检查、更新日志。",
   "requires": {
     "windows": "Windows 10/11",
     "python": "便携版已内置；源码版 3.10+",
@@ -9,7 +9,7 @@
     "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
   },
   "assets": {
-    "portable_zip": "local-image-workbench-0.2.0-beta-portable.zip",
-    "sha256": "78dfa75bd30512245de70cda96b054998229397f9c233cff80a37598da4a547b"
+    "portable_zip": "local-image-workbench-0.3.0-beta-portable.zip",
+    "sha256": "de3e49eab62122e7e44d590dd0c0d2f7bac83c3283b6aac805bf2799179f4ac2"
   }
 }
