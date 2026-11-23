@@ -121,6 +121,32 @@ BEGINNER_RATIOS = {
     "方图": (1024, 1024),
     "横图": (1216, 832),
 }
+RANDOM_PROMPTS = [
+    "雪山脚下的湖泊，清晨薄雾，远处日照金山，宁静的电影感风景摄影",
+    "雨后竹林小径，湿润石板路，柔和的散射光，清新的东方意境",
+    "秋日森林溪流，金黄落叶，慢门流水，温暖的午后阳光，自然摄影",
+    "海边白色灯塔，黄昏云层，长曝光海浪，孤独而安静的氛围",
+    "薰衣草花田，远山和晚霞，微风起伏，柔和的胶片色彩",
+    "雨夜城市小巷，霓虹招牌倒映在积水里，电影感街景，无人",
+    "未来城市天际线，清晨云海，玻璃幕墙反射天光，科幻概念设计",
+    "老上海街角，梧桐树影，复古电车，暖色调纪实摄影",
+    "安静的木屋图书馆，高窗透入阳光，漂浮的灰尘，温暖的室内场景",
+    "橘猫趴在窗台，午后阳光，绿植和旧书，柔软的生活感照片",
+    "雪地里的赤狐，回眸，冬日森林背景，浅景深野生动物摄影",
+    "鲸鱼在云层上方游动，超现实风景，柔和月光，梦幻插画",
+    "猫头鹰停在古老树枝上，夜色和薄雾，细节丰富的自然摄影",
+    "早餐桌，手冲咖啡和可颂，晨光穿过窗帘，温暖的生活方式摄影",
+    "陶罐里的野花，粗糙桌面，侧光，极简静物摄影",
+    "太空站舷窗，蓝色行星和星云，冷色调科幻场景，电影概念图",
+    "漂浮在云海上的小岛，瀑布流向天空，奇幻风景插画",
+    "被植物覆盖的机械废墟，晨雾，藤蔓和齿轮，安静的科幻场景",
+    "复古跑车行驶在山路，黄昏逆光，公路旅行摄影",
+    "蒸汽火车穿过雪原，白色蒸汽，远处山脉，怀旧电影感",
+    "沙漠夜空，银河和篝火，远处帐篷，广角星空摄影",
+    "热带雨林瀑布，阳光穿过树冠，水雾和苔藓，生机勃勃的自然景观",
+    "冬日湖边小屋，屋顶积雪，窗户透出暖光，蓝调时刻",
+    "手工陶瓷工作台，未完成的陶罐，泥土和工具，安静的纪实静物",
+]
 BEGINNER_INSPIRATION = {
     "随机": [
         "银发成年女性，雨夜霓虹街头，黑色风衣，温柔地看着镜头，电影感人像",
@@ -1479,12 +1505,16 @@ class PromptWorkbench:
                                            insertbackground=COLORS["text"], relief="flat", bd=0,
                                            font=("Microsoft YaHei UI", 11), padx=12, pady=10)
         self.beginner_brief.pack(fill="x", padx=18, pady=(0, 8))
-        self.beginner_brief.insert("1.0", "例如：银发成年女性，雨夜霓虹街头，黑色风衣，温柔地看着镜头，电影感人像")
+        self.beginner_brief.insert("1.0", "例如：雪山脚下的湖泊，清晨薄雾，远处日照金山，宁静的电影感风景摄影")
 
         inspire_row = tk.Frame(simple_card, bg=COLORS["panel"])
         inspire_row.pack(fill="x", padx=18, pady=(0, 6))
         tk.Label(inspire_row, text="灵感", bg=COLORS["panel"], fg=COLORS["muted"],
                  font=FONT_SMALL).pack(side="left", padx=(0, 8))
+        tk.Button(inspire_row, text="随机提示词", command=self._beginner_random_prompt,
+                  bg=COLORS["card2"], fg=COLORS["accent2"], relief="flat", bd=0,
+                  padx=8, pady=3, font=("Microsoft YaHei UI", 9, "bold"), cursor="hand2").pack(
+                      side="left", padx=(0, 6))
         for label in ("随机", "人物", "服装", "场景", "光线"):
             tk.Button(inspire_row, text=label,
                       command=lambda k=label: self._beginner_inspire(k),
@@ -3390,10 +3420,10 @@ LoRA 目标目录：{lora_root}
                 return
         brief = self.beginner_brief.get("1.0", "end").strip()
         if not brief or brief.startswith("例如："):
-            brief = "银发成年女性，雨夜霓虹街头，黑色风衣，温柔地看着镜头，电影感"
+            brief = random.choice(RANDOM_PROMPTS)
             self.beginner_brief.delete("1.0", "end")
             self.beginner_brief.insert("1.0", brief)
-            self.status_var.set("已填入示例画面，正在生成…")
+            self.status_var.set("已随机填入提示词，正在生成…")
         style = self.beginner_style.get()
         if style and style != "无风格":
             brief += f"\n画面风格：{style}"
@@ -3411,6 +3441,16 @@ LoRA 目标目录：{lora_root}
         self.beginner_progressbar.configure(maximum=2, value=0)
         self.beginner_generate_btn.configure(state="disabled", text="正在写提示词…")
         self.generate()
+
+    def _beginner_random_prompt(self):
+        current = self.beginner_brief.get("1.0", "end").strip()
+        text = random.choice(RANDOM_PROMPTS)
+        if text == current and len(RANDOM_PROMPTS) > 1:
+            text = random.choice([x for x in RANDOM_PROMPTS if x != current])
+        self.beginner_brief.delete("1.0", "end")
+        self.beginner_brief.insert("1.0", text)
+        self.beginner_brief.focus_set()
+        self.status_var.set("已随机填入提示词，可继续修改")
 
     def _beginner_inspire(self, kind):
         values = BEGINNER_INSPIRATION.get(kind) or []
