@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.9-beta
+
+- 角色本地搜索不再按当前底模隐藏其他底模 LoRA，全部显示并同底模优先。
+- 在线角色搜索也跨底模返回，同底模排前面。
+- 选中不同底模时详情警告，并在接入前二次确认；不切换可能导致 LoRA 不加载或效果异常。
+- 接入记录使用 LoRA 实际底模，而不是当前底模。
+
+
 ## 0.5.8-beta
 
 - 简洁模式“清除主题”可解除角色主题锁定并恢复自动挑选。
@@ -155,6 +163,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 

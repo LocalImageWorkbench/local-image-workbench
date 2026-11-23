@@ -53,7 +53,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.8-beta"
+    APP_VERSION = "0.5.9-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -3757,6 +3757,22 @@ class PromptWorkbench:
             status.configure(text=f"{source_var.get()} · 找到 {len(records)} 个角色 LoRA；选中后接入")
             install_btn.configure(state="disabled")
 
+        def base_compatible(rec_base, current_base):
+            a = str(rec_base or "").lower()
+            b = str(current_base or "").lower()
+            return (not a or not b or a == b
+                    or ("illustrious" in a and "illustrious" in b)
+                    or ("sdxl" in a and "sdxl" in b))
+
+        def warn_mismatch(rec):
+            return messagebox.askyesno(
+                APP_NAME,
+                f"底模不匹配：\n当前底模：{expected_base}\n"
+                f"角色 LoRA：{rec.get('base') or '未知'}\n\n"
+                "建议先切到该 LoRA 的底模再用。\n"
+                "不切换直接接入：LoRA 可能不加载，出图效果异常，甚至触发工作流报错。\n\n"
+                "仍要接入吗？", parent=top)
+
         def show_detail(_event=None):
             sel = tree.selection()
             if not sel:
@@ -3765,14 +3781,24 @@ class PromptWorkbench:
             words = "、".join(rec.get("trained_words") or []) or "无"
             detail.configure(state="normal")
             detail.delete("1.0", "end")
+            compatible = base_compatible(rec.get("base"), expected_base)
+            warning = ""
+            if not compatible:
+                warning = ("\n\n⚠ 底模不匹配\n"
+                           f"建议切换底模：{rec.get('base') or '未知'}\n"
+                           "不切换直接接入，LoRA 可能不加载或出图效果异常。")
             detail.insert("1.0", f"{rec.get('name', '')}\n"
                                  f"版本：{rec.get('version_name', '')}  ·  底模：{rec.get('base', '')}\n"
                                  f"训练词：{words}\n"
                                  f"命中别名：{rec.get('matched_alias', '')}\n"
-                                 f"页面：{rec.get('page_url', '')}")
+                                 f"页面：{rec.get('page_url', '')}{warning}")
             detail.configure(state="disabled")
-            install_btn.configure(state="normal",
-                                  text="本地直接接入" if rec.get("local_path") else "下载并接入")
+            if compatible:
+                install_btn.configure(state="normal", bg=COLORS["accent"],
+                                      text="本地直接接入" if rec.get("local_path") else "下载并接入")
+            else:
+                install_btn.configure(state="normal", bg=COLORS["red"],
+                                      text="仍要接入（底模不匹配）")
 
         tree.bind("<<TreeviewSelect>>", show_detail)
 
@@ -3784,12 +3810,8 @@ class PromptWorkbench:
                 return
             if source_var.get() == "本地已安装":
                 needle = text.lower()
-                exp_base = str(expected_base).lower()
                 rows = []
                 for item in getattr(self, "all_lora_files", []):
-                    item_base = str(item.get("base", "")).lower()
-                    if exp_base and item_base and item_base != exp_base:
-                        continue
                     name = str(item.get("name", ""))
                     trig, _ = detect_triggers(item["path"], self.known_triggers)
                     blob = (name + " " + " ".join(trig) + " " + str(item.get("label", ""))).lower()
@@ -3803,6 +3825,7 @@ class PromptWorkbench:
                         "name": Path(name).stem,
                         "type": "LORA",
                         "base": item.get("base", ""),
+                        "base_match": base_compatible(item.get("base"), expected_base),
                         "version_name": "本地已安装",
                         "size_kb": size_kb,
                         "downloads": 0,
@@ -3811,12 +3834,18 @@ class PromptWorkbench:
                         "local_path": str(item["path"]),
                         "file_name": name,
                     })
+                # 本地查询不按底模过滤；同底模排前面，其余仍可见。
+                rows.sort(key=lambda r: (0 if r.get("base_match") else 1,
+                                         str(r.get("name", "")).lower()))
                 busy["search"] = False
                 render(rows)
+                status.configure(
+                    text=f"本地已安装 · 找到 {len(rows)} 个（同底模优先）")
                 return
             busy["search"] = True
             status.configure(text="正在联网搜索 Civitai…")
-            base_filter = "Illustrious" if base["key"] == "illustrious" else ""
+            # 在线也返回跨底模结果，前端按兼容度排序；不再静默过滤
+            base_filter = ""
             model_id = self.model_map.get(self.model_var.get(), "")
 
             def worker():
@@ -3868,6 +3897,10 @@ class PromptWorkbench:
                         search_one(text)
                         used_aliases.append(text)
                     rows = [merged[k] for k in order]
+                    for rec in rows:
+                        rec["base_match"] = base_compatible(rec.get("base"), expected_base)
+                    rows.sort(key=lambda r: (0 if r.get("base_match") else 1,
+                                             str(r.get("name", "")).lower()))
                     if not rows and errors:
                         q.put(("error", errors[0]))
                     else:
@@ -3906,22 +3939,14 @@ class PromptWorkbench:
                 return
             rec = records[int(sel[0])]
             if rec.get("local_path"):
+                if not base_compatible(rec.get("base"), expected_base) and not warn_mismatch(rec):
+                    return
                 self._attach_character(rec["local_path"], rec, expected_base)
                 messagebox.showinfo(APP_NAME, f"已接入本地角色：\n{Path(rec['local_path']).name}",
                                     parent=top)
                 top.destroy()
                 return
-            rec_base = str(rec.get("base", "")).lower()
-            exp_base = str(expected_base).lower()
-            compatible = (not rec_base or not exp_base or rec_base in exp_base or exp_base in rec_base
-                          or ("illustrious" in rec_base and "illustrious" in exp_base)
-                          or ("sdxl" in rec_base and "sdxl" in exp_base))
-            if not compatible:
-                messagebox.showwarning(
-                    APP_NAME,
-                    f"底模不匹配：\n当前底模：{expected_base}\n角色 LoRA：{rec.get('base') or '未知'}\n\n"
-                    "请先在简洁模式切换到匹配的底模（角色 LoRA 通常用 Illustrious/SDXL）。",
-                    parent=top)
+            if not base_compatible(rec.get("base"), expected_base) and not warn_mismatch(rec):
                 return
             try:
                 dest = model_center.destination_dir(CFG, "lora")
@@ -4370,7 +4395,7 @@ LoRA 目标目录：{lora_root}
             "label": f"角色/{Path(path).name}",
             "path": path,
             "name": Path(path).name,
-            "base": expected_base,
+            "base": rec.get("base") or expected_base,
             "strength": 0.8,
         }
         self.beginner_pinned_lora = item
@@ -7837,6 +7862,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

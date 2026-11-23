@@ -1,7 +1,7 @@
 {
-  "version": "0.5.8-beta",
-  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.8-beta",
-  "notes": "0.5.8-beta：简洁模式角色主题可清除并恢复自动挑选。",
+  "version": "0.5.9-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.9-beta",
+  "notes": "0.5.9-beta：角色本地/在线搜索跨底模显示，同底模优先并警告不匹配。",
   "requires": {
     "windows": "Windows 10/11",
     "python": "便携版已内置；源码版 3.10+",
@@ -9,7 +9,7 @@
     "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
   },
   "assets": {
-    "portable_zip": "local-image-workbench-0.5.8-beta-portable.zip",
-    "sha256": "790373520f6df953c10db565be96c7f65c39e607f3beef23f7142634e8ea5c16"
+    "portable_zip": "local-image-workbench-0.5.9-beta-portable.zip",
+    "sha256": "364e82f7bfa36798fb91032a7df274ed26dc33eb5770e13b20ab7a4014eda6ab"
   }
 }
