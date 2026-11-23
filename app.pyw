@@ -52,7 +52,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.2-beta"
+    APP_VERSION = "0.5.3-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -2148,8 +2148,19 @@ class PromptWorkbench:
         self.beginner_result_hint.pack(side="left", padx=(8, 0))
         self.beginner_results_inner = tk.Frame(simple_card, bg=COLORS["panel"])
         self.beginner_results_inner.pack(fill="both", expand=True, padx=14, pady=(0, 12))
+        self.beginner_results_inner.grid_columnconfigure(0, weight=1)
+        self.beginner_results_inner.grid_columnconfigure(1, weight=1)
+        self.beginner_results_inner.grid_rowconfigure(0, weight=1)
         self.beginner_result_photos = []
         self.beginner_result_paths = []
+        self.beginner_preview_canvas = tk.Canvas(
+            self.beginner_results_inner, bg="#ffffff", highlightbackground=COLORS["line"],
+            highlightthickness=1, bd=0)
+        self.beginner_preview_canvas.grid(row=0, column=0, columnspan=2, sticky="nsew",
+                                          padx=8, pady=8)
+        self.beginner_preview_canvas.bind(
+            "<Configure>", lambda _e: self._render_beginner_preview())
+        self.root.after(80, self._render_beginner_preview)
         self.beginner_mode_var.set(bool(self.settings.get("beginner_mode", True)))
         self._apply_beginner_mode(save=False)
 
@@ -4947,33 +4958,60 @@ LoRA 目标目录：{lora_root}
         if value is not None:
             self.beginner_progressbar.configure(value=value)
 
+    def _render_beginner_preview(self):
+        if not hasattr(self, "beginner_preview_canvas"):
+            return
+        canvas = self.beginner_preview_canvas
+        if not canvas.winfo_exists():
+            return
+        canvas.delete("all")
+        self.beginner_preview_photos = []
+        width = max(320, canvas.winfo_width())
+        height = max(220, canvas.winfo_height())
+        paths = [p for p in getattr(self, "beginner_result_paths", []) if Path(p).exists()]
+        if not paths:
+            canvas.create_text(width / 2, height / 2 - 14, text="生成结果会显示在这里",
+                               fill=COLORS["muted"], font=("Microsoft YaHei UI", 15, "bold"))
+            canvas.create_text(width / 2, height / 2 + 20,
+                               text="按 Ctrl+Enter 或点右下角“开始生成”",
+                               fill=COLORS["muted"], font=("Microsoft YaHei UI", 9))
+            return
+        if PILImage is None or PILImageTk is None:
+            canvas.create_text(width / 2, height / 2,
+                               text=f"已生成 {len(paths)} 张；缺少 Pillow，无法预览",
+                               fill=COLORS["muted"], font=("Microsoft YaHei UI", 10))
+            return
+        shown = paths[:4]
+        cols = 1 if len(shown) == 1 else 2
+        rows = max(1, (len(shown) + cols - 1) // cols)
+        pad = 10
+        cell_w = max(120, (width - pad * (cols + 1)) // cols)
+        cell_h = max(100, (height - pad * (rows + 1)) // rows)
+        for i, path in enumerate(shown):
+            try:
+                img = PILImage.open(path).convert("RGB")
+                img.thumbnail((cell_w, cell_h - 16))
+                photo = PILImageTk.PhotoImage(img)
+                self.beginner_preview_photos.append(photo)
+                col, row = i % cols, i // cols
+                cx = pad + cell_w * (col + 0.5) + pad * col
+                cy = pad + cell_h * (row + 0.5) + pad * row
+                tag = f"preview_{i}"
+                canvas.create_image(cx, cy - 6, image=photo, tags=(tag,))
+                canvas.tag_bind(tag, "<Button-1>", lambda _e, p=path: os.startfile(p))
+                canvas.create_text(cx, cy + cell_h / 2 - 6, text=Path(path).name,
+                                   fill=COLORS["muted"], font=("Microsoft YaHei UI", 7),
+                                   tags=(f"name_{i}",))
+                canvas.tag_bind(f"name_{i}", "<Button-1>", lambda _e, p=path: os.startfile(p))
+            except Exception:
+                pass
+
     def _show_beginner_results(self, paths):
         if not hasattr(self, "beginner_results_inner"):
             return
-        for w in self.beginner_results_inner.winfo_children():
-            w.destroy()
         self.beginner_result_photos = []
         self.beginner_result_paths = list(paths)
-        for i, path in enumerate(paths[:4]):
-            try:
-                img = tk.PhotoImage(file=path)
-                factor = max(1, img.width() // 260, img.height() // 260)
-                if factor > 1:
-                    img = img.subsample(factor, factor)
-                self.beginner_result_photos.append(img)
-                cell = tk.Frame(self.beginner_results_inner, bg=COLORS["panel"])
-                cell.grid(row=i // 2, column=i % 2, padx=8, pady=4, sticky="n")
-                lbl = tk.Label(cell, image=img, bg=COLORS["panel"], cursor="hand2")
-                lbl.pack()
-                lbl.bind("<Button-1>", lambda e, p=path: os.startfile(p))
-                tk.Label(cell, text=Path(path).name, bg=COLORS["panel"], fg=COLORS["muted"],
-                         font=("Microsoft YaHei UI", 7)).pack()
-            except Exception:
-                pass
-        if paths and not self.beginner_result_photos:
-            tk.Label(self.beginner_results_inner, text=f"已生成 {len(paths)} 张，打开输出目录查看。",
-                     bg=COLORS["panel"], fg=COLORS["muted"], font=FONT_SMALL).grid(
-                         row=0, column=0, padx=8, pady=8)
+        self._render_beginner_preview()
 
     def _check_health(self):
         try:
@@ -7647,6 +7685,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

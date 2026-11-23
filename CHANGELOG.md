@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.3-beta
+
+- 简洁模式结果区改为白色预览画布：无图时显示空状态，生成后按 1/2/4 张自动缩放铺入。
+- 预览图点击可直接打开原图；不再留下大块空白。
+- 结果画布随窗口尺寸自动重排。
+
+
 ## 0.5.2-beta
 
 - 角色主题新增道具、天气、季节、配色、构图组件，SFW/NSFW 分库。
@@ -113,6 +120,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 

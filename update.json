@@ -1,7 +1,7 @@
 {
-  "version": "0.5.2-beta",
-  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.2-beta",
-  "notes": "0.5.2-beta：随机库精选/模板、SFW/NSFW 分库、角色主题 LoRA 随机、服装套组、主题组件、画幅。",
+  "version": "0.5.3-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.3-beta",
+  "notes": "0.5.3-beta：简洁模式白色预览画布，生成结果自动铺入；含 0.5.2 角色主题、SFW/NSFW 随机库和快捷键。",
   "requires": {
     "windows": "Windows 10/11",
     "python": "便携版已内置；源码版 3.10+",
@@ -9,7 +9,7 @@
     "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
   },
   "assets": {
-    "portable_zip": "local-image-workbench-0.5.2-beta-portable.zip",
-    "sha256": "5259c7c95f50d5a12df7588d6865a721c001b789f9d0b31f953a629c344a4990"
+    "portable_zip": "local-image-workbench-0.5.3-beta-portable.zip",
+    "sha256": "a74337aea814ba850e3d0249dcf9335f8da1410f1501f15835bfe38c759b9803"
   }
 }
