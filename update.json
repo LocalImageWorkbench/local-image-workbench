@@ -1,7 +1,7 @@
 {
-  "version": "0.5.9-beta",
-  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.9-beta",
-  "notes": "0.5.9-beta：角色本地/在线搜索跨底模显示，同底模优先并警告不匹配。",
+  "version": "0.5.9.1-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.9.1-beta",
+  "notes": "0.5.9.1-beta：角色搜索一键切换底模，保留原底模选项带警告。",
   "requires": {
     "windows": "Windows 10/11",
     "python": "便携版已内置；源码版 3.10+",
@@ -9,7 +9,7 @@
     "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
   },
   "assets": {
-    "portable_zip": "local-image-workbench-0.5.9-beta-portable.zip",
-    "sha256": "364e82f7bfa36798fb91032a7df274ed26dc33eb5770e13b20ab7a4014eda6ab"
+    "portable_zip": "local-image-workbench-0.5.9.1-beta-portable.zip",
+    "sha256": "fcf756fff873ff447832095e2f53fb0f921884b043ed8243d9bb143cdf0d9498"
   }
 }

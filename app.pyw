@@ -53,7 +53,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.9-beta"
+    APP_VERSION = "0.5.9.1-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -3735,6 +3735,11 @@ class PromptWorkbench:
                                 bg=COLORS["accent"], fg="#fff", relief="flat", bd=0,
                                 padx=12, pady=5, cursor="hand2")
         install_btn.pack(side="right")
+        keep_btn = tk.Button(bar, text="保留原底模（不推荐）",
+                             bg=COLORS["panel"], fg=COLORS["red"], relief="flat", bd=0,
+                             padx=8, pady=5, cursor="hand2")
+        keep_btn.pack(side="right", padx=(0, 6))
+        keep_btn.pack_forget()
         cancel_event = threading.Event()
         cancel_btn = tk.Button(bar, text="取消", state="disabled",
                                bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
@@ -3796,9 +3801,11 @@ class PromptWorkbench:
             if compatible:
                 install_btn.configure(state="normal", bg=COLORS["accent"],
                                       text="本地直接接入" if rec.get("local_path") else "下载并接入")
+                keep_btn.pack_forget()
             else:
-                install_btn.configure(state="normal", bg=COLORS["red"],
-                                      text="仍要接入（底模不匹配）")
+                install_btn.configure(state="normal", bg=COLORS["accent"],
+                                      text="一键切换底模并接入（推荐）")
+                keep_btn.pack(side="right", padx=(0, 6))
 
         tree.bind("<<TreeviewSelect>>", show_detail)
 
@@ -3931,22 +3938,25 @@ class PromptWorkbench:
                 status.configure(text="搜索失败")
                 messagebox.showerror(APP_NAME, f"搜索失败：{payload}", parent=top)
 
-        def do_install():
+        def do_install(keep_original=False):
             if busy["download"]:
                 return
             sel = tree.selection()
             if not sel:
                 return
             rec = records[int(sel[0])]
-            if rec.get("local_path"):
-                if not base_compatible(rec.get("base"), expected_base) and not warn_mismatch(rec):
+            compatible = base_compatible(rec.get("base"), expected_base)
+            if not compatible:
+                if keep_original:
+                    if not warn_mismatch(rec):
+                        return
+                elif not self._switch_to_lora_base(rec.get("base")):
                     return
+            if rec.get("local_path"):
                 self._attach_character(rec["local_path"], rec, expected_base)
                 messagebox.showinfo(APP_NAME, f"已接入本地角色：\n{Path(rec['local_path']).name}",
                                     parent=top)
                 top.destroy()
-                return
-            if not base_compatible(rec.get("base"), expected_base) and not warn_mismatch(rec):
                 return
             try:
                 dest = model_center.destination_dir(CFG, "lora")
@@ -4015,7 +4025,8 @@ class PromptWorkbench:
                 status.configure(text="正在取消；.part 文件会保留。")
 
         cancel_btn.configure(command=cancel_download)
-        install_btn.configure(command=do_install)
+        install_btn.configure(command=lambda: do_install(False))
+        keep_btn.configure(command=lambda: do_install(True))
         top.protocol("WM_DELETE_WINDOW", top.destroy)
 
     def open_civitai_browser(self, initial_query=""):
@@ -4388,6 +4399,42 @@ LoRA 目标目录：{lora_root}
         tk.Button(bar, text="关闭", command=top.destroy, bg=COLORS["panel"],
                   fg=COLORS["muted"], relief="flat", bd=0, padx=10, pady=6,
                   cursor="hand2").pack(side="right")
+
+    def _switch_to_lora_base(self, base):
+        raw = str(base or "").strip()
+        if not raw:
+            return False
+        key = raw if raw in BASE_WORKFLOW else None
+        if key is None:
+            low = raw.lower()
+            key = next((k for k in BASE_WORKFLOW
+                        if k.lower() in low or low in k.lower()
+                        or k.lower().split("/")[0] in low), None)
+        if key is None:
+            messagebox.showwarning(APP_NAME, f"无法识别底模：{raw}")
+            return False
+        if key in BASE_WORKFLOW:
+            missing = self._missing_profile_cached(BASE_WORKFLOW[key])
+            if missing and not messagebox.askyesno(
+                    APP_NAME,
+                    f"底模 {key} 缺少文件：\n"
+                    + "、".join(x.get("filename", "") for x in missing)
+                    + "\n\n仍要切换吗？切换后出图可能失败。"):
+                return False
+        if self.beginner_mode_var.get():
+            b = next((x for x in BEGINNER_BASES if x.get("workflow") == BASE_WORKFLOW[key]), None)
+            if b:
+                self.beginner_base_key = b["key"]
+                self._update_beginner_base_summary()
+                self._update_beginner_base_label()
+                self._update_base_recommendation()
+                self._refresh_beginner_missing()
+        self.target_var.set(BASE_TARGET.get(key, self.target_var.get()))
+        self._on_target_change(manual=False)
+        self.generation_workflow_var.set(wbgen.WORKFLOWS[BASE_WORKFLOW[key]]["name"])
+        self.status_var.set(f"已切换到角色底模：{key}")
+        self._save_settings()
+        return True
 
     def _attach_character(self, path, rec, expected_base):
         path = str(path)
@@ -7862,6 +7909,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

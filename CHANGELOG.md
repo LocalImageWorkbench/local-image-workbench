@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.9.1-beta
+
+- 角色搜索不匹配时新增“一键切换底模并接入（推荐）”。
+- 旁边保留小的“保留原底模（不推荐）”，仍会二次警告后果。
+- 切换前检查目标底模文件；缺文件会先询问。
+
+
 ## 0.5.9-beta
 
 - 角色本地搜索不再按当前底模隐藏其他底模 LoRA，全部显示并同底模优先。
@@ -163,6 +170,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 
