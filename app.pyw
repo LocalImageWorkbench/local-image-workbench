@@ -757,6 +757,7 @@ class PromptWorkbench:
         self.root.configure(bg=COLORS["bg"])
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.bind("<Control-Return>", lambda e: self.generate())
+        self.root.bind_all("<Control-q>", lambda e: self._exit_app())
 
         try:
             self.root.iconbitmap(str(APP_ICON))
@@ -781,6 +782,9 @@ class PromptWorkbench:
         self.model_map = {label: model_id for label, model_id in MODEL_OPTIONS}
         self.desired_model_id = None
         self.used_models = set()
+        self._llm_active = 0
+        self._llm_last_used = time.monotonic()
+        self._exiting = False
         self.lora_filter = tk.StringVar(value="全部")
         self.lora_strength = tk.DoubleVar(value=0.7)
         self.generation_workflow_var = tk.StringVar(value="")
@@ -836,6 +840,7 @@ class PromptWorkbench:
         self._load_settings()
         self.root.after(150, self._poll_queue)
         self.root.after(300, self._bind_left_mousewheel)
+        self.root.after(30000, self._check_llm_idle)
         if CFG.is_new or not CFG.paths("lora_roots"):
             self.root.after(700, self.open_first_run_wizard)
         threading.Thread(target=self._check_health, daemon=True).start()
@@ -1018,6 +1023,8 @@ class PromptWorkbench:
 
         tk.Label(sidebar, text=f"{APP_NAME}\nv{APP_VERSION}  ·  快捷本地出图", bg=COLORS["panel"],
                  fg="#8a93a6", font=("Microsoft YaHei UI", 9), justify="left").pack(side="bottom", anchor="w", padx=20, pady=18)
+        self._btn(sidebar, "退出程序", self._exit_app, COLORS["panel"], COLORS["muted"],
+                  icon="stop").pack(side="bottom", anchor="w", padx=14, pady=(0, 4))
 
         # 主区域
         main = tk.Frame(root, bg=COLORS["bg"])
@@ -2534,6 +2541,40 @@ class PromptWorkbench:
         self._refresh_lora_selected()
         self.status_var.set("已清除角色")
 
+    def _llm_chat(self, *args, **kwargs):
+        """所有 LLM 调用统一记账，供空闲卸载和关闭时使用。"""
+        self._llm_active += 1
+        self._llm_last_used = time.monotonic()
+        try:
+            result = llm_client.chat(*args, **kwargs)
+            model = kwargs.get("model") or CFG.get("llm_model")
+            if model:
+                self.used_models.add(str(model))
+            return result
+        finally:
+            self._llm_active = max(0, self._llm_active - 1)
+            self._llm_last_used = time.monotonic()
+
+    def _check_llm_idle(self):
+        try:
+            minutes = float(CFG.get("llm_idle_unload_minutes", 5) or 0)
+            if (minutes > 0 and self.used_models and self._llm_active == 0
+                    and not self.generating
+                    and time.monotonic() - self._llm_last_used >= minutes * 60):
+                if str(CFG.get("llm_type", "")).lower() == "ollama":
+                    models = list(self.used_models)
+                    for model in models:
+                        try:
+                            llm_client.unload(CFG, model)
+                        except Exception:
+                            pass
+                    self.used_models.clear()
+                    self.status_var.set(f"LLM 已空闲 {minutes:g} 分钟，已卸载显存")
+        except Exception:
+            pass
+        finally:
+            self.root.after(30000, self._check_llm_idle)
+
     def _character_aliases(self, query, model_id=""):
         prompt = (
             "把下面的角色中文名/别名转换成适合 Civitai 搜索的英文名、罗马音和常见拼写。"
@@ -2541,8 +2582,8 @@ class PromptWorkbench:
             "优先官方英文名和通行罗马音；不要只给中文。\n"
             f"角色：{query}"
         )
-        raw = llm_client.chat(CFG, [{"role": "user", "content": prompt}],
-                              model=model_id, temperature=0.2, num_predict=220)
+        raw = self._llm_chat(CFG, [{"role": "user", "content": prompt}],
+                             model=model_id, temperature=0.2, num_predict=220)
         text = re.sub(r"^```(?:json)?\s*", "", (raw or "").strip())
         text = re.sub(r"\s*```$", "", text)
         items = []
@@ -3024,8 +3065,8 @@ class PromptWorkbench:
 
             def worker():
                 try:
-                    raw = llm_client.chat(CFG, [{"role": "user", "content": prompt}],
-                                          model=model_id, temperature=0.2, num_predict=220)
+                    raw = self._llm_chat(CFG, [{"role": "user", "content": prompt}],
+                                         model=model_id, temperature=0.2, num_predict=220)
                     q.put(("ok", raw))
                 except Exception as e:
                     q.put(("error", str(e)))
@@ -3739,12 +3780,11 @@ LoRA 目标目录：{lora_root}
 修改要求：
 {instruction}"""
         try:
-            text = llm_client.chat(
+            text = self._llm_chat(
                 CFG,
                 [{"role": "system", "content": system},
                  {"role": "user", "content": user}],
                 model=model, temperature=0.5, num_ctx=32768, num_predict=2048)
-            self.used_models.add(model)
             self.queue.put(("refined", text, instruction, brief, target, mode, pos, neg))
         except Exception as e:
             self.queue.put(("refine_error", str(e), instruction))
@@ -3796,12 +3836,11 @@ LoRA 目标目录：{lora_root}
 
     def _worker_generate(self, model, system, brief, target, mode):
         try:
-            text = llm_client.chat(
+            text = self._llm_chat(
                 CFG,
                 [{"role": "system", "content": system},
                  {"role": "user", "content": brief}],
                 model=model, temperature=0.6, num_ctx=32768, num_predict=2048)
-            self.used_models.add(model)
             self.queue.put(("done", text, brief, target, mode))
         except Exception as e:
             self.queue.put(("error", str(e), brief, target, mode))
@@ -5035,6 +5074,36 @@ LoRA 目标目录：{lora_root}
         wizard_row("output_dir", "输出目录", browse=True)
         wizard_row("comfy_url", "ComfyUI 地址")
         wizard_row("llm_base_url", "LLM 地址")
+
+        behavior = tk.Frame(p1, bg=COLORS["panel"])
+        behavior.pack(fill="x", pady=(10, 2))
+        tk.Label(behavior, text="关闭窗口时", width=13, anchor="w", bg=COLORS["panel"],
+                 fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
+        close_var = tk.StringVar(value=str(CFG.get("close_action", "minimize") or "minimize"))
+        fields["close_action"] = close_var
+        tk.Radiobutton(behavior, text="最小化（推荐，生成不中断）", variable=close_var,
+                       value="minimize", bg=COLORS["panel"], fg=COLORS["text"],
+                       activebackground=COLORS["panel"], selectcolor=COLORS["input"],
+                       font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 8))
+        tk.Radiobutton(behavior, text="直接退出", variable=close_var,
+                       value="exit", bg=COLORS["panel"], fg=COLORS["text"],
+                       activebackground=COLORS["panel"], selectcolor=COLORS["input"],
+                       font=("Microsoft YaHei UI", 9)).pack(side="left")
+
+        idle_row = tk.Frame(p1, bg=COLORS["panel"])
+        idle_row.pack(fill="x", pady=(4, 2))
+        tk.Label(idle_row, text="空闲卸载 LLM", width=13, anchor="w", bg=COLORS["panel"],
+                 fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
+        idle_var = tk.StringVar(value=str(CFG.get("llm_idle_unload_minutes", 5) or 5))
+        fields["llm_idle_unload_minutes"] = idle_var
+        idle_combo = ttk.Combobox(idle_row, textvariable=idle_var, width=6, state="readonly",
+                                  values=("0", "2", "5", "10", "15", "30", "60"))
+        idle_combo.pack(side="left")
+        self._disable_combo_wheel(idle_combo)
+        tk.Label(idle_row, text="分钟不用 LLM 后卸载 Ollama 显存；0 = 不卸载",
+                 bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
         if det:
             tk.Label(p1, text=f"已自动找到 ComfyUI：{det['root']}",
                      bg=COLORS["panel"], fg=COLORS["green"],
@@ -5548,6 +5617,32 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         row("comfy_workflows_dir", "工作流目录", "dir")
         row("tool80_path", "8.0 精修 HTML（可选）", "file")
 
+        behavior = tk.Frame(form, bg=COLORS["panel"])
+        behavior.pack(fill="x", padx=12, pady=(10, 4))
+        tk.Label(behavior, text="关闭窗口时", width=13, anchor="w", bg=COLORS["panel"],
+                 fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
+        close_var = tk.StringVar(value=str(CFG.get("close_action", "minimize") or "minimize"))
+        vars_["close_action"] = close_var
+        ttk.Combobox(behavior, textvariable=close_var, width=12, state="readonly",
+                     values=("minimize", "exit")).pack(side="left", padx=(0, 8))
+        tk.Label(behavior, text="minimize = 最小化；exit = 退出",
+                 bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+
+        idle = tk.Frame(form, bg=COLORS["panel"])
+        idle.pack(fill="x", padx=12, pady=(0, 4))
+        tk.Label(idle, text="空闲卸载 LLM", width=13, anchor="w", bg=COLORS["panel"],
+                 fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
+        idle_var = tk.StringVar(value=str(CFG.get("llm_idle_unload_minutes", 5) or 5))
+        vars_["llm_idle_unload_minutes"] = idle_var
+        idle_combo = ttk.Combobox(idle, textvariable=idle_var, width=6, state="readonly",
+                                  values=("0", "2", "5", "10", "15", "30", "60"))
+        idle_combo.pack(side="left")
+        self._disable_combo_wheel(idle_combo)
+        tk.Label(idle, text="分钟不用 LLM 后卸载 Ollama 显存；0 = 不卸载",
+                 bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
         status = tk.Label(top, text="", bg=COLORS["bg"], fg=COLORS["muted"],
                           font=FONT_SMALL, anchor="w")
         status.pack(fill="x", padx=20, pady=(8, 4))
@@ -5761,11 +5856,27 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
                 pass
         self.used_models.clear()
 
+    def _exit_app(self):
+        if getattr(self, "_exiting", False):
+            return
+        if self.generating and not messagebox.askyesno(
+                APP_NAME, "正在出图，现在退出会中断生成。\n确定退出吗？"):
+            return
+        self._exiting = True
+        try:
+            self._save_settings()
+            save_json(HISTORY_FILE, self.records)
+        finally:
+            self._unload_used_models()
+            self.root.destroy()
+
     def on_close(self):
-        self._save_settings()
-        save_json(HISTORY_FILE, self.records)
-        self._unload_used_models()
-        self.root.destroy()
+        action = str(CFG.get("close_action", "minimize") or "minimize").lower()
+        if action != "exit":
+            self.root.iconify()
+            self.status_var.set("已最小化；按 Ctrl+Q 或侧栏“退出程序”可退出")
+            return
+        self._exit_app()
 
 
 def main():
