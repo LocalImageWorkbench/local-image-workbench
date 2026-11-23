@@ -914,6 +914,7 @@ class PromptWorkbench:
     def _btn(self, parent, text, command, bg=None, fg=None, width=None, font=None, icon=None):
         b = tk.Button(parent, text=text, command=command,
                       bg=bg or COLORS["card2"], fg=fg or COLORS["text"],
+                      disabledforeground=fg or COLORS["text"],
                       activebackground=COLORS["accent2"], activeforeground="#fff",
                       relief="flat", bd=0, padx=12, pady=7,
                       font=font or FONT_SMALL, cursor="hand2",
@@ -1551,8 +1552,9 @@ class PromptWorkbench:
                   padx=6, pady=4, cursor="hand2").pack(side="left", padx=(8, 0))
         self.beginner_generate_btn = tk.Button(
             bottom_row, text="开始生成", command=self.beginner_generate,
-            bg=COLORS["accent"], fg="#fff", activebackground=COLORS["accent2"],
-            activeforeground="#fff", relief="flat", bd=0, padx=22, pady=8,
+            bg=COLORS["accent"], fg="#fff", disabledforeground="#fff",
+            activebackground=COLORS["accent2"], activeforeground="#fff",
+            relief="flat", bd=0, padx=22, pady=8,
             font=("Microsoft YaHei UI", 11, "bold"), cursor="hand2")
         self._decorate_button(self.beginner_generate_btn, "sparkles", "white")
         self.beginner_generate_btn.pack(side="right")
