@@ -1,7 +1,7 @@
 {
-  "version": "0.5.6-beta",
-  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.6-beta",
-  "notes": "0.5.6-beta：提示词片段编辑，按逗号拆分、替换/删除/追加。",
+  "version": "0.5.7-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.7-beta",
+  "notes": "0.5.7-beta：简洁模式角色主题随机，保持简洁模式并锁定 LoRA。",
   "requires": {
     "windows": "Windows 10/11",
     "python": "便携版已内置；源码版 3.10+",
@@ -9,7 +9,7 @@
     "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
   },
   "assets": {
-    "portable_zip": "local-image-workbench-0.5.6-beta-portable.zip",
-    "sha256": "e97fe3138165b83ab3cf454249c0ee5f834370fa1e6f9b8f91ab26f48cfea7ed"
+    "portable_zip": "local-image-workbench-0.5.7-beta-portable.zip",
+    "sha256": "7a0398fa65352a7d8c36bd7fcde738ef1d147d92ad438976929e81e82b82da20"
   }
 }

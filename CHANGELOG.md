@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.7-beta
+
+- 简洁模式角色行增加“角色主题随机”入口，复用同一面板。
+- 角色主题应用后保持简洁模式，不强制切高级。
+- 主题会写回角色底模、LoRA 和触发词；自动重选被锁定，避免覆盖。
+- 角色主题面板新增“锁定/自动”逻辑，重新选普通 LoRA 时仍可手动处理。
+
+
 ## 0.5.6-beta
 
 - 简洁模式“继续修改”提示改为可点的“怎么用 · 片段编辑”按钮。
@@ -140,6 +148,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 

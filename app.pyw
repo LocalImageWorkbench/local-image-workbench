@@ -53,7 +53,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.6-beta"
+    APP_VERSION = "0.5.7-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -1176,6 +1176,7 @@ class PromptWorkbench:
         self.env_queue = queue.Queue()
         self.beginner_pinned_lora = None
         self.beginner_character_trigger = ""
+        self.beginner_theme_locked = False
         self.civitai_guide_seen = bool(self.settings.get("civitai_guide_seen", False))
         self.beginner_pending = False
 
@@ -1983,6 +1984,10 @@ class PromptWorkbench:
                              padx=9, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2")
         char_btn.pack(side="right")
         self._decorate_button(char_btn, "character")
+        tk.Button(character_row, text="角色主题随机", command=self.open_lora_theme,
+                  bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
+                  padx=9, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
+                      side="right", padx=(0, 6))
         tk.Button(character_row, text="清除",
                   command=self.clear_beginner_character,
                   bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
@@ -2549,11 +2554,23 @@ class PromptWorkbench:
                 "strength": round(float(strength), 2), "enabled": True, "role": slot,
             })
         if self.beginner_mode_var.get():
-            self.beginner_mode_var.set(False)
-            self._apply_beginner_mode(save=True)
+            beginner_base = next((b for b in BEGINNER_BASES
+                                  if b.get("workflow") == workflow_key), None)
+            if beginner_base:
+                self.beginner_base_key = beginner_base["key"]
+                self._update_beginner_base_summary()
+                self._update_beginner_base_label()
+                self._update_base_recommendation()
+                self._refresh_beginner_missing()
         self.target_var.set(BASE_TARGET.get(base, self.target_var.get()))
         self.generation_workflow_var.set(wbgen.WORKFLOWS[workflow_key]["name"])
         self.selected_loras = selected
+        if self.beginner_mode_var.get():
+            self.beginner_theme_locked = True
+            self.auto_pick_var.set(False)
+            if hasattr(self, "beginner_character_label"):
+                self.beginner_character_label.configure(
+                    text=f"角色主题：{picked['character']['label']}")
         self._refresh_lora_selected()
         triggers = [r.get("trigger", "") for r in (picked["character"], picked.get("pose"), picked.get("style")) if r]
         components = tcomponents.pick(sfw, component_keys)
@@ -2575,11 +2592,14 @@ class PromptWorkbench:
         self.lora_theme_dialog = None
 
     def _prepend_theme_triggers(self, triggers):
-        text = self.positive_text.get("1.0", "end").strip()
+        target = self.beginner_brief if self.beginner_mode_var.get() else self.positive_text
+        text = target.get("1.0", "end").strip()
+        if text.startswith("例如："):
+            text = ""
         add = [t for t in triggers if t and t not in text]
         if add:
-            self.positive_text.delete("1.0", "end")
-            self.positive_text.insert("1.0", "，".join(add) + ("，" + text if text else ""))
+            target.delete("1.0", "end")
+            target.insert("1.0", "，".join(add) + ("，" + text if text else ""))
             self._update_prompt_counts()
 
     def _recommend_lora_inline(self):
@@ -5072,7 +5092,10 @@ LoRA 目标目录：{lora_root}
         self._on_target_change(manual=False)
         self.generation_workflow_var.set(wbgen.WORKFLOWS[base["workflow"]]["name"])
         self.gen_count_var.set(max(1, min(4, int(self.beginner_count_var.get() or 1))))
-        self.auto_pick_var.set(True)
+        if not getattr(self, "beginner_theme_locked", False):
+            self.auto_pick_var.set(True)
+        else:
+            self.auto_pick_var.set(False)
         self._save_settings()
 
     def _beginner_set_progress(self, text, value=None, maximum=None):
@@ -7811,6 +7834,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
