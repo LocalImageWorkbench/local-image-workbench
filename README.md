@@ -195,3 +195,8 @@ python -m unittest discover -s tests -v
 
 SFW 与 NSFW 使用独立提示词库；NSFW 混合时按权重偏向人物/私房，SFW 模式不会回退到 NSFW。
 
+
+## 角色主题随机（V5.1）
+
+LoRA 可标角色/姿势/风格；随机角色后仅组合同底模的姿势/风格 LoRA，最多三层。
+

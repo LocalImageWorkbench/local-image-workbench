@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1-beta
+
+- LoRA 增加角色/姿势/风格/其他标记，标记保存在 `lora-roles.json`。
+- 新增“角色主题随机”：先随机角色 LoRA，再只组合同底模的姿势/风格 LoRA。
+- 角色/姿势/风格最多三槽，角色 0.9、姿势/风格独立强度。
+- 随机主题会把角色和 LoRA 触发词加入正向提示词，并切换到角色底模。
+- 自动分类只是猜测，用户可在主题面板手动改。
+
+
 ## 0.5.0-beta
 
 - 随机提示词升级为“精选库 + 模板组合”：精选完整句库默认使用，模板按主体/服装/场景/光线/镜头组合。
@@ -95,6 +104,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 

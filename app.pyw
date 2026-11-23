@@ -36,6 +36,7 @@ import workbench_generate as wbgen
 import workflow_import as wfimport
 import core_state as core
 import random_library as rlibrary
+import lora_roles as lroles
 import lora_match
 import config as appconfig
 import llm_client
@@ -50,7 +51,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.0-beta"
+    APP_VERSION = "0.5.1-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -1112,6 +1113,7 @@ class PromptWorkbench:
         self.lora_files = []
         self.all_lora_files = []
         self.selected_loras = []
+        self.lora_role_store = lroles.RoleStore(DATA_DIR / "lora-roles.json")
         self.model_map = {label: model_id for label, model_id in MODEL_OPTIONS}
         self.desired_model_id = None
         self.used_models = set()
@@ -1620,6 +1622,8 @@ class PromptWorkbench:
         lora_actions.pack(fill="x", padx=8, pady=(0, 6))
         self.lora_recommend_btn = self._btn(lora_actions, "推荐 LoRA", self._recommend_lora_inline,
                                             COLORS["card2"], COLORS["text"])
+        self._btn(lora_actions, "角色主题随机", self.open_lora_theme,
+                  COLORS["card2"], COLORS["text"]).pack(side="left", padx=(4, 0))
         self.lora_recommend_btn.pack(side="left")
         ttk.Checkbutton(lora_actions, text="自动选 LoRA", variable=self.auto_pick_var,
                         command=self._save_settings).pack(side="left", padx=(8, 0))
@@ -2273,6 +2277,181 @@ class PromptWorkbench:
             lines.append(f"- {item['name']}；强度：{item.get('strength', 0.7)}；触发词：{trig}")
         lines.append("规则：触发词自然融入 Positive，不要只堆触发词；没有明确触发词时不要编造。")
         return "\n".join(lines)
+
+    def _theme_records(self):
+        records = []
+        for item in self.all_lora_files:
+            base = str(item.get("base", ""))
+            if base not in BASE_WORKFLOW:
+                continue
+            trigger, _source = detect_triggers(Path(item["path"]), self.known_triggers)
+            rec = {"item": item, "name": item.get("name", ""),
+                   "label": item.get("label", item.get("name", "")),
+                   "path": item.get("path", ""), "base": base,
+                   "trigger": " / ".join(trigger)}
+            records.append(rec)
+        return records
+
+    def _theme_refresh(self, listbox, records, counts_label, selection=None):
+        listbox.delete(0, "end")
+        counts = {"character": 0, "pose": 0, "style": 0, "other": 0}
+        for rec in records:
+            role = self.lora_role_store.role_for(rec["item"])
+            counts[role] = counts.get(role, 0) + 1
+            listbox.insert("end", f"[{lroles.ROLE_LABELS[role]}] {rec['name']}｜{rec['base']}")
+        counts_label.configure(
+            text=f"角色 {counts['character']} · 姿势 {counts['pose']} · 风格 {counts['style']} · 其他 {counts['other']}")
+        if selection is not None and records:
+            listbox.selection_set(min(selection, len(records) - 1))
+
+    def open_lora_theme(self):
+        if getattr(self, "lora_theme_dialog", None) is not None:
+            try:
+                self.lora_theme_dialog.lift()
+                return
+            except Exception:
+                self.lora_theme_dialog = None
+        records = self._theme_records()
+        if not records:
+            messagebox.showinfo(APP_NAME, "没有找到可用的 LoRA。")
+            return
+        top = tk.Toplevel(self.root)
+        self.lora_theme_dialog = top
+        top.title("角色主题随机")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 900, 650)
+        top.transient(self.root)
+        tk.Label(top, text="角色主题随机", bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=20, pady=(14, 2))
+        tk.Label(top, text="先给 LoRA 标角色/姿势/风格；随机时只组合同一底模，最多 3 个。",
+                 bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(
+                     anchor="w", padx=20, pady=(0, 8))
+        counts_label = tk.Label(top, text="", bg=COLORS["bg"], fg=COLORS["accent2"],
+                                font=("Microsoft YaHei UI", 9, "bold"))
+        counts_label.pack(anchor="w", padx=20, pady=(0, 4))
+        list_frame = tk.Frame(top, bg=COLORS["bg"])
+        list_frame.pack(fill="both", expand=True, padx=20)
+        theme_list = tk.Listbox(list_frame, bg=COLORS["input"], fg=COLORS["text"],
+                                selectbackground=COLORS["accent2"], selectforeground="#fff",
+                                relief="flat", bd=0, font=("Microsoft YaHei UI", 9),
+                                activestyle="none", exportselection=False)
+        theme_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=theme_list.yview)
+        theme_list.configure(yscrollcommand=theme_scroll.set)
+        theme_scroll.pack(side="right", fill="y")
+        theme_list.pack(side="left", fill="both", expand=True)
+        self._theme_refresh(theme_list, records, counts_label)
+
+        role_row = tk.Frame(top, bg=COLORS["bg"])
+        role_row.pack(fill="x", padx=20, pady=(8, 0))
+        tk.Label(role_row, text="选中项标记为", bg=COLORS["bg"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left")
+        for role in ("character", "pose", "style", "other"):
+            tk.Button(role_row, text=lroles.ROLE_LABELS[role],
+                      command=lambda r=role: self._theme_set_role(records, theme_list, counts_label, r),
+                      bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
+                      padx=8, pady=3, cursor="hand2").pack(side="left", padx=(4, 0))
+        tk.Label(role_row, text="自动猜测可手动改；角色决定底模，姿势/风格自动同底模。",
+                 bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 8)).pack(
+                     side="left", padx=(8, 0))
+
+        opts = tk.Frame(top, bg=COLORS["bg"])
+        opts.pack(fill="x", padx=20, pady=(10, 0))
+        pose_var = tk.BooleanVar(value=True)
+        style_var = tk.BooleanVar(value=True)
+        tk.Checkbutton(opts, text="随机姿势 LoRA", variable=pose_var, bg=COLORS["bg"],
+                       fg=COLORS["text"], activebackground=COLORS["bg"],
+                       selectcolor=COLORS["input"], font=("Microsoft YaHei UI", 9)).pack(side="left")
+        tk.Checkbutton(opts, text="随机风格 LoRA", variable=style_var, bg=COLORS["bg"],
+                       fg=COLORS["text"], activebackground=COLORS["bg"],
+                       selectcolor=COLORS["input"], font=("Microsoft YaHei UI", 9)).pack(
+                           side="left", padx=(8, 0))
+        tk.Label(opts, text="强度", bg=COLORS["bg"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(12, 2))
+        pose_strength = tk.DoubleVar(value=0.7)
+        style_strength = tk.DoubleVar(value=0.6)
+        tk.Spinbox(opts, from_=0.2, to=1.0, increment=0.05, textvariable=pose_strength, width=4,
+                   bg=COLORS["input"], fg=COLORS["text"], relief="flat", bd=0).pack(side="left")
+        tk.Label(opts, text="姿势 /", bg=COLORS["bg"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(3, 2))
+        tk.Spinbox(opts, from_=0.2, to=1.0, increment=0.05, textvariable=style_strength, width=4,
+                   bg=COLORS["input"], fg=COLORS["text"], relief="flat", bd=0).pack(side="left")
+        tk.Label(opts, text="风格", bg=COLORS["bg"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(3, 0))
+
+        btns = tk.Frame(top, bg=COLORS["bg"])
+        btns.pack(fill="x", padx=20, pady=(12, 14))
+        tk.Button(btns, text="随机角色主题并应用",
+                  command=lambda: self._apply_lora_theme(records, pose_var.get(), style_var.get(),
+                                                         float(pose_strength.get()),
+                                                         float(style_strength.get()), top),
+                  bg=COLORS["accent"], fg="#fff", relief="flat", bd=0,
+                  padx=16, pady=6, font=("Microsoft YaHei UI", 10, "bold"), cursor="hand2").pack(side="right")
+        tk.Button(btns, text="关闭", command=top.destroy, bg=COLORS["card2"], fg=COLORS["text"],
+                  relief="flat", bd=0, padx=12, pady=5, cursor="hand2").pack(side="right", padx=(0, 6))
+        top.protocol("WM_DELETE_WINDOW", lambda: (setattr(self, "lora_theme_dialog", None), top.destroy()))
+
+    def _theme_set_role(self, records, listbox, counts_label, role):
+        sel = listbox.curselection()
+        if not sel:
+            return
+        rec = records[sel[0]]
+        self.lora_role_store.set_role(rec["item"], role)
+        self._theme_refresh(listbox, records, counts_label, sel[0])
+
+    def _apply_lora_theme(self, records, pose, style, pose_strength, style_strength, top):
+        items = []
+        for rec in records:
+            base = rec["base"]
+            if base not in BASE_WORKFLOW:
+                continue
+            if self._missing_profile_cached(BASE_WORKFLOW[base]):
+                continue
+            items.append(rec)
+        if not items:
+            messagebox.showinfo(APP_NAME, "没有已安装底模可用的 LoRA。", parent=top)
+            return
+        picked = lroles.choose_theme([r["item"] for r in items], self.lora_role_store,
+                                     pose=pose, style=style)
+        if not picked:
+            messagebox.showinfo(APP_NAME, "没有标记为“角色”的 LoRA。先选一个 LoRA 点“角色”。", parent=top)
+            return
+        base = picked["base"]
+        workflow_key = BASE_WORKFLOW.get(base)
+        if not workflow_key:
+            messagebox.showwarning(APP_NAME, f"底模 {base} 没有对应内置工作流。", parent=top)
+            return
+        selected = []
+        for slot, strength in (("character", 0.9), ("pose", pose_strength), ("style", style_strength)):
+            rec = picked.get(slot)
+            if not rec:
+                continue
+            item = rec["item"]
+            selected.append({
+                "name": item["name"], "label": item["label"], "path": str(item["path"]),
+                "base": base, "trigger": rec.get("trigger", ""),
+                "strength": round(float(strength), 2), "enabled": True, "role": slot,
+            })
+        if self.beginner_mode_var.get():
+            self.beginner_mode_var.set(False)
+            self._apply_beginner_mode(save=True)
+        self.target_var.set(BASE_TARGET.get(base, self.target_var.get()))
+        self.generation_workflow_var.set(wbgen.WORKFLOWS[workflow_key]["name"])
+        self.selected_loras = selected
+        self._refresh_lora_selected()
+        triggers = [r.get("trigger", "") for r in (picked["character"], picked.get("pose"), picked.get("style")) if r]
+        self._prepend_theme_triggers(triggers)
+        names = " + ".join(x["name"] for x in selected)
+        self.status_var.set(f"角色主题已应用：{names}")
+        top.destroy()
+        self.lora_theme_dialog = None
+
+    def _prepend_theme_triggers(self, triggers):
+        text = self.positive_text.get("1.0", "end").strip()
+        add = [t for t in triggers if t and t not in text]
+        if add:
+            self.positive_text.delete("1.0", "end")
+            self.positive_text.insert("1.0", "，".join(add) + ("，" + text if text else ""))
+            self._update_prompt_counts()
 
     def _recommend_lora_inline(self):
         prompt = self.positive_text.get("1.0", "end").strip()
@@ -7353,6 +7532,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
