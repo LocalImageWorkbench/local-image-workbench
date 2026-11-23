@@ -184,3 +184,8 @@ python -m unittest discover -s tests -v
 
 内置 54 条本地提示词，按人物、场景、动物、静物、科幻奇幻分类；默认混合随机，可切换到单一类型。
 
+
+## V5 随机库
+
+- 精选库（默认）+ 模板组合 + 混合三种方式
+- 支持导入/导出 andom-library.json`n

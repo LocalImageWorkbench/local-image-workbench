@@ -35,6 +35,7 @@ from tkinter.scrolledtext import ScrolledText
 import workbench_generate as wbgen
 import workflow_import as wfimport
 import core_state as core
+import random_library as rlibrary
 import lora_match
 import config as appconfig
 import llm_client
@@ -49,7 +50,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.4.0-preview"
+    APP_VERSION = "0.5.0-preview"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -212,6 +213,70 @@ RANDOM_PROMPT_CATEGORY_STYLES = {
     "动物": "写实",
     "静物": "写实",
     "科幻奇幻": "插画",
+}
+RANDOM_PROMPT_TEMPLATES = {
+    "人物": {
+        "style": "电影感",
+        "format": "{subject}，{outfit}，{action}，{setting}，{light}，{lens}，电影感人像",
+        "parts": {
+            "subject": ["成年女性，银灰色长发", "成年男性，短发，自然肤质", "成年女性，黑色长发，神情安静",
+                        "成年男性，深色卷发，穿高领毛衣", "成年女性，短发，五官清晰"],
+            "outfit": ["黑色长风衣", "白色衬衫和深色长裤", "复古西装", "白色针织衫和长裙", "深色皮夹克"],
+            "action": ["侧身看向镜头", "安静地站在窗前", "缓缓走过街道", "坐在长椅上阅读", "回眸微笑"],
+            "setting": ["雨夜霓虹街头", "安静的旧图书馆", "海边黄昏", "森林晨雾", "老上海街角"],
+            "light": ["电影感侧逆光", "柔和的窗边自然光", "霓虹灯与雨水反射", "黄昏暖色轮廓光", "低调的室内灯光"],
+            "lens": ["85mm 人像镜头", "50mm 自然视角", "浅景深特写", "中景构图", "低角度半身像"],
+        },
+    },
+    "场景": {
+        "style": "电影感",
+        "format": "{place}，{weather}，{time}，{foreground}，{light}，{lens}，电影感风景摄影",
+        "parts": {
+            "place": ["雪山脚下的湖泊", "雨后的竹林小径", "秋日森林溪流", "海边白色灯塔", "安静的湖边小屋",
+                      "薰衣草花田", "沙漠中的公路"],
+            "weather": ["清晨薄雾", "雨后湿润的空气", "云层散开的瞬间", "细雪飘落", "晚风轻拂"],
+            "time": ["清晨", "黄昏", "蓝调时刻", "午后", "夜晚"],
+            "foreground": ["前景是一块湿润的石头", "远处有一艘小船", "近处是低矮的野花", "画面边缘有树枝"],
+            "light": ["柔和的散射光", "日照金山", "长曝光云层", "暖色逆光", "冷色月光"],
+            "lens": ["广角风景构图", "中长焦压缩空间", "低机位前景层次", "对称构图", "宽银幕比例"],
+        },
+    },
+    "动物": {
+        "style": "写实",
+        "format": "{subject}，{action}，{setting}，{light}，{lens}，野生动物摄影",
+        "parts": {
+            "subject": ["雪地里的赤狐", "晨雾中的梅花鹿", "停在古树枝上的猫头鹰", "草地上的垂耳兔",
+                        "海边奔跑的白马", "悬崖上的金雕"],
+            "action": ["回眸", "安静地注视远方", "展开翅膀", "在草丛中停下", "踏水而过"],
+            "setting": ["冬日森林背景", "高山草甸", "海边礁石", "晨雾林间", "开阔的雪原"],
+            "light": ["浅景深逆光", "柔和的晨光", "低角度侧光", "冷色月光", "黄昏暖光"],
+            "lens": ["长焦特写", "低机位跟拍", "浅景深半身", "广角环境肖像", "连拍动态抓拍"],
+        },
+    },
+    "静物": {
+        "style": "写实",
+        "format": "{subject}，{surface}，{light}，{lens}，极简静物摄影",
+        "parts": {
+            "subject": ["陶罐里的野花", "一杯手冲咖啡和可颂", "旧木桌上的黄铜怀表",
+                        "堆叠的旧书和一杯茶", "复古胶片相机", "白瓷盘里的无花果"],
+            "surface": ["粗糙的木质桌面", "深色石板台面", "亚麻桌布", "斑驳的旧木桌", "哑光黑色台面"],
+            "light": ["窗边柔和侧光", "午后光斑", "低调轮廓光", "清晨斜射光", "暖色台灯"],
+            "lens": ["微距细节", "中焦平视", "浅景深特写", "俯拍构图", "低角度静物"],
+        },
+    },
+    "科幻奇幻": {
+        "style": "插画",
+        "format": "{subject}，{tech}，{setting}，{light}，{mood}，电影概念设计",
+        "parts": {
+            "subject": ["未来城市天际线", "太空站舷窗", "漂浮在云海上的小岛", "被植物覆盖的机械废墟",
+                        "赛博朋克夜市", "沙漠中的巨型环形遗迹", "漂浮的图书馆"],
+            "tech": ["全息招牌和飞行器", "蓝色行星和星云", "发光矿脉和机械结构", "失控的机器人和齿轮",
+                     "悬浮书本和金色尘埃", "古代飞船的破损风帆"],
+            "setting": ["清晨云海", "冷色调太空", "雨后霓虹街道", "发光水晶洞穴", "落日下的荒原"],
+            "light": ["冷色轮廓光", "霓虹反射", "金色晨光", "幽蓝雾气", "强烈逆光"],
+            "mood": ["安静而宏大", "孤独而神秘", "充满探索感", "史诗感", "梦境般超现实"],
+        },
+    },
 }
 RANDOM_PROMPT_STYLE_RULES = (
     (("鲸鱼", "小岛", "奇幻", "插画", "云层上方", "飞船", "水晶洞穴"), "插画"),
@@ -838,6 +903,15 @@ class PromptWorkbench:
         WORKBENCH_LIBRARY.mkdir(parents=True, exist_ok=True)
 
         self.settings = load_json(SETTINGS_FILE, {})
+        self.random_library_path = DATA_DIR / "random-library.json"
+        self.random_library_error = ""
+        self.random_library = rlibrary.default_library(
+            RANDOM_PROMPT_LIBRARY, RANDOM_PROMPT_CATEGORY_STYLES, RANDOM_PROMPT_TEMPLATES)
+        if self.random_library_path.exists():
+            try:
+                self.random_library = rlibrary.load_user(self.random_library_path)
+            except Exception as e:
+                self.random_library_error = str(e)
         self.task = core.TaskController()
         self.services = core.ServiceRegistry()
         self.diagnostics = core.JsonlDiagnostics(LOG_DIR / "diagnostics.jsonl")
@@ -899,8 +973,11 @@ class PromptWorkbench:
             self.beginner_style.set("无风格")
         self.random_auto_match_var = tk.BooleanVar(value=bool(self.settings.get("random_auto_match", True)))
         self.random_category_var = tk.StringVar(value=self.settings.get("random_category", "混合"))
-        if self.random_category_var.get() not in ("混合", *RANDOM_PROMPT_LIBRARY.keys()):
+        if self.random_category_var.get() not in ("混合", *self.random_library["categories"].keys()):
             self.random_category_var.set("混合")
+        self.random_mode_var = tk.StringVar(value=self.settings.get("random_mode", "精选"))
+        if self.random_mode_var.get() not in rlibrary.MODES:
+            self.random_mode_var.set("精选")
         self.beginner_ratio = tk.StringVar(value=self.settings.get("beginner_ratio", "竖图"))
         if self.beginner_ratio.get() not in BEGINNER_RATIOS:
             self.beginner_ratio.set("竖图")
@@ -1738,13 +1815,6 @@ class PromptWorkbench:
                        command=self._toggle_random_auto_match, bg=COLORS["panel"], fg=COLORS["muted"],
                        activebackground=COLORS["panel"], selectcolor=COLORS["input"],
                        font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(0, 6))
-        tk.Label(inspire_row, text="范围", bg=COLORS["panel"], fg=COLORS["muted"],
-                 font=("Microsoft YaHei UI", 8)).pack(side="left")
-        self.random_category_combo = ttk.Combobox(
-            inspire_row, textvariable=self.random_category_var, width=6, state="readonly",
-            values=["混合", *RANDOM_PROMPT_LIBRARY.keys()], font=("Microsoft YaHei UI", 8))
-        self.random_category_combo.pack(side="left", padx=(2, 6))
-        self.random_category_combo.bind("<<ComboboxSelected>>", self._on_random_category_change)
         tk.Button(inspire_row, text="收藏", command=self._favorite_prompt,
                   bg=COLORS["panel"], fg=COLORS["accent2"], relief="flat", bd=0,
                   padx=5, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
@@ -1762,6 +1832,28 @@ class PromptWorkbench:
         tk.Label(inspire_row, text="点一下补进描述，可继续改",
                  bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 9)).pack(side="right")
+
+        random_options = tk.Frame(simple_card, bg=COLORS["panel"])
+        random_options.pack(fill="x", padx=18, pady=(0, 6))
+        tk.Label(random_options, text="随机库", bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 8)).pack(side="left")
+        tk.Label(random_options, text="范围", bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(6, 0))
+        self.random_category_combo = ttk.Combobox(
+            random_options, textvariable=self.random_category_var, width=7, state="readonly",
+            values=["混合", *self.random_library["categories"].keys()], font=("Microsoft YaHei UI", 8))
+        self.random_category_combo.pack(side="left", padx=(2, 6))
+        self.random_category_combo.bind("<<ComboboxSelected>>", self._on_random_category_change)
+        tk.Label(random_options, text="方式", bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 8)).pack(side="left")
+        self.random_mode_combo = ttk.Combobox(
+            random_options, textvariable=self.random_mode_var, width=5, state="readonly",
+            values=list(rlibrary.MODES), font=("Microsoft YaHei UI", 8))
+        self.random_mode_combo.pack(side="left", padx=(2, 8))
+        self.random_mode_combo.bind("<<ComboboxSelected>>", self._on_random_mode_change)
+        tk.Label(random_options, text="精选=完整句库，模板=组合生成，混合=两者随机（默认精选）",
+                 bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 8)).pack(side="left")
 
         style_row = tk.Frame(simple_card, bg=COLORS["panel"])
         style_row.pack(fill="x", padx=18, pady=(0, 8))
@@ -2325,6 +2417,7 @@ class PromptWorkbench:
             "beginner_style": self.beginner_style.get(),
             "random_auto_match": bool(self.random_auto_match_var.get()),
             "random_category": self.random_category_var.get(),
+            "random_mode": self.random_mode_var.get(),
             "beginner_ratio": self.beginner_ratio.get(),
             "beginner_count": int(self.beginner_count_var.get() or 1),
             "civitai_guide_seen": bool(getattr(self, "civitai_guide_seen", False)),
@@ -4153,6 +4246,71 @@ LoRA 目标目录：{lora_root}
         else:
             self.status_var.set(f"随机提示词范围：{category}")
 
+    def _on_random_mode_change(self, _event=None):
+        self._save_settings()
+        self.status_var.set(f"随机方式：{self.random_mode_var.get()}")
+
+    def _refresh_random_library_choices(self):
+        categories = ["混合", *self.random_library["categories"].keys()]
+        if self.random_category_var.get() not in categories:
+            self.random_category_var.set("混合")
+        if hasattr(self, "random_category_combo"):
+            self.random_category_combo.configure(values=categories)
+
+    def _reload_random_library(self):
+        self._refresh_random_library_choices()
+        if hasattr(self, "random_library_path_label"):
+            if self.random_library_error:
+                self.random_library_path_label.configure(
+                    text=f"用户库读取失败，已用内置库：{self.random_library_error}",
+                    fg=COLORS["red"])
+            else:
+                source = (str(self.random_library_path) if self.random_library_path.exists()
+                          else "内置精选库")
+                self.random_library_path_label.configure(text=source, fg=COLORS["muted"])
+
+    def _import_random_library(self):
+        path = filedialog.askopenfilename(
+            parent=self.root, title="导入随机库 JSON",
+            filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            data = rlibrary.load_user(path)
+            rlibrary.save_user(self.random_library_path, data)
+            self.random_library = data
+            self.random_library_error = ""
+            self._reload_random_library()
+            self.status_var.set(
+                f"随机库已导入：{len(data['categories'])} 类 / {sum(len(x['prompts']) for x in data['categories'].values())} 条精选")
+        except Exception as e:
+            messagebox.showerror(APP_NAME, f"随机库导入失败：\n{e}", parent=self.root)
+
+    def _export_random_library(self):
+        path = filedialog.asksaveasfilename(
+            parent=self.root, title="导出随机库 JSON", defaultextension=".json",
+            initialfile="random-library.json", filetypes=[("JSON", "*.json")])
+        if not path:
+            return
+        try:
+            rlibrary.save_user(path, self.random_library)
+            self.status_var.set(f"随机库已导出：{path}")
+        except Exception as e:
+            messagebox.showerror(APP_NAME, f"导出失败：\n{e}", parent=self.root)
+
+    def _reset_random_library(self):
+        try:
+            if self.random_library_path.exists():
+                self.random_library_path.unlink()
+        except Exception as e:
+            messagebox.showerror(APP_NAME, f"恢复失败：\n{e}", parent=self.root)
+            return
+        self.random_library = rlibrary.default_library(
+            RANDOM_PROMPT_LIBRARY, RANDOM_PROMPT_CATEGORY_STYLES, RANDOM_PROMPT_TEMPLATES)
+        self.random_library_error = ""
+        self._reload_random_library()
+        self.status_var.set("已恢复内置随机库")
+
     def _random_prompt_style(self, text):
         for words, style in RANDOM_PROMPT_STYLE_RULES:
             if any(word in text for word in words):
@@ -4190,23 +4348,32 @@ LoRA 目标目录：{lora_root}
     def _beginner_random_prompt(self):
         current = self.beginner_brief.get("1.0", "end").strip()
         category = self.random_category_var.get()
-        pool = (RANDOM_PROMPTS if category == "混合"
-                else RANDOM_PROMPT_LIBRARY.get(category) or RANDOM_PROMPTS)
-        text = random.choice(pool)
-        if text == current and len(pool) > 1:
-            text = random.choice([x for x in pool if x != current])
+        mode = self.random_mode_var.get()
+        picked = None
+        for _ in range(8):
+            try:
+                picked = rlibrary.pick(self.random_library, category, mode)
+            except Exception as e:
+                self.status_var.set(f"随机库不可用：{e}")
+                return
+            if picked.get("text") and picked["text"] != current:
+                break
+        if not picked:
+            return
+        text = picked["text"]
         self.beginner_brief.delete("1.0", "end")
         self.beginner_brief.insert("1.0", text)
         self.beginner_brief.focus_set()
         if self.random_auto_match_var.get():
-            style = self._random_prompt_style(text)
+            style = picked.get("style") or self._random_prompt_style(text)
             self._select_beginner_style(style)
             base_key, base_note = self._random_auto_base(style)
             if base_key != self.beginner_base_key:
                 self._select_beginner_base(base_key)
-            self.status_var.set(f"已随机填入，自动匹配：{style} · {base_note}")
+            self.status_var.set(
+                f"已随机填入（{picked.get('category')}/{picked.get('mode')}），自动匹配：{style} · {base_note}")
         else:
-            self.status_var.set("已随机填入提示词，可继续修改")
+            self.status_var.set(f"已随机填入（{picked.get('category')}/{picked.get('mode')}），可继续修改")
 
     def _beginner_inspire(self, kind):
         values = BEGINNER_INSPIRATION.get(kind) or []
@@ -6538,6 +6705,25 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         tk.Label(idle, text="分钟不用 LLM 后卸载 Ollama 显存；0 = 不卸载",
                  bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        random_lib = tk.Frame(behavior_tab, bg=COLORS["panel"])
+        random_lib.pack(fill="x", padx=12, pady=(8, 4))
+        tk.Label(random_lib, text="随机库", width=13, anchor="w", bg=COLORS["panel"],
+                 fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
+        self.random_library_path_label = tk.Label(
+            random_lib, text="", bg=COLORS["panel"], fg=COLORS["muted"],
+            font=("Microsoft YaHei UI", 8), anchor="w")
+        self.random_library_path_label.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        tk.Button(random_lib, text="导入 JSON", command=self._import_random_library,
+                  bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
+                  padx=7, pady=3, cursor="hand2").pack(side="right", padx=(4, 0))
+        tk.Button(random_lib, text="导出当前", command=self._export_random_library,
+                  bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
+                  padx=7, pady=3, cursor="hand2").pack(side="right", padx=(4, 0))
+        tk.Button(random_lib, text="恢复内置", command=self._reset_random_library,
+                  bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
+                  padx=6, pady=3, cursor="hand2").pack(side="right")
+        self._reload_random_library()
 
         guides = tk.Frame(guide_tab, bg=COLORS["panel"])
         guides.pack(fill="x", padx=12, pady=(8, 4))

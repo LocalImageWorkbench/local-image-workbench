@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0-preview
+
+- 随机提示词升级为“精选库 + 模板组合”：精选完整句库默认使用，模板按主体/服装/场景/光线/镜头组合。
+- 随机库支持导入、导出、恢复内置；用户库保存在 `%APPDATA%\PromptWorkbench\random-library.json`。
+- 随机库分类扩充并保留人物/场景/动物/静物/科幻奇幻范围选择。
+- 随机库自动匹配风格与底模，只在已安装底模中切换；未安装只做推荐。
+- 软件内增加快捷键弹窗、侧栏入口和生成按钮旁 Ctrl+Enter 提示。
+
+
 ## 0.4.0-preview
 
 - 新增统一任务状态、ComfyUI/LLM 服务状态和 GenerationRequest。
@@ -86,6 +95,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 
