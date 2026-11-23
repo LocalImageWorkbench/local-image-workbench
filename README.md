@@ -163,3 +163,9 @@ python -m unittest discover -s tests -v
 
 夸克是补充发行渠道，不是 GitHub 镜像；不含模型权重，NSFW 仅限 18+。
 
+
+## 用户文档
+
+- 使用说明：`使用说明.md`（便携包同目录）
+- 完整更新日志：`CHANGELOG.md`（GitHub 仓库）
+
