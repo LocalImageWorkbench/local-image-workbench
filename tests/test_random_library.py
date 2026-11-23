@@ -54,6 +54,18 @@ class RandomLibraryTests(unittest.TestCase):
         self.assertEqual(data["categories"]["人物"]["style"], "写实")
         self.assertEqual(len(data["categories"]["人物"]["prompts"]), 1)
 
+    def test_nsfw_section_and_fallback(self):
+        data = rl.default_library(
+            CATS, STYLES, TEMPLATES,
+            nsfw_categories={"人物": ["成年女性，私房人像"]},
+            nsfw_weights={"人物": 6})
+        got = rl.pick(data, "人物", "精选", sfw=False)
+        self.assertEqual(got["section"], "NSFW")
+        self.assertEqual(got["text"], "成年女性，私房人像")
+        fallback = rl.pick(data, "场景", "精选", sfw=False)
+        self.assertEqual(fallback["section"], "SFW")
+        self.assertEqual(fallback["category"], "场景")
+
     def test_invalid(self):
         with self.assertRaises(rl.LibraryError):
             rl.normalize({"categories": {}})

@@ -278,6 +278,51 @@ RANDOM_PROMPT_LIBRARY = {
         "宇宙星云，尘埃带，冷暖对比，深空摄影",
     ],
 }
+NSFW_PROMPT_LIBRARY = {
+    "人物": [
+        "成年女性，黑色丝绸吊带裙，卧室窗边，柔和晨光，私房人像",
+        "成年男性，敞开的白衬衫，酒店落地窗，夜景灯光，成熟人像",
+        "成年女性，蕾丝内衣外搭衬衫，复古沙发，暖色台灯，私房摄影",
+        "成年男性，浴巾，浴室蒸汽，低调侧光，成熟氛围",
+        "成年女性，泳装，海边黄昏，湿发，电影感",
+        "成年女性，丝质睡裙，床单，晨光，慵懒氛围",
+        "成年男性，黑色背心，健身房，汗水，低角度",
+        "成年女性，长裙滑落肩头，窗边剪影，艺术人像",
+        "成年女性，黑色蕾丝，酒店套房，镜前，暖色灯",
+        "成年男性，白色衬衫湿透，雨中，低饱和色调，成熟人像",
+    ],
+    "时尚服装": [
+        "成年女性，黑色蕾丝内衣，深色背景，柔和轮廓光，私房",
+        "成年女性，白色衬衫和黑色长袜，卧室，晨光，私房摄影",
+        "成年男性，黑色浴袍，酒店走廊，暖色壁灯，成熟氛围",
+        "成年女性，泳装和薄纱外搭，海边别墅，黄昏，电影感",
+        "成年女性，束腰和丝绸长裙，复古房间，窗边侧光",
+        "成年男性，深色西装，敞开领口，酒吧，低光，成熟人像",
+        "成年女性，丝绸睡袍，梳妆台，镜前灯，私房",
+        "成年女性，针织开衫滑落肩头，床单，柔光，慵懒人像",
+    ],
+    "场景": [
+        "成年情侣，海边别墅，黄昏，泳池边，亲密氛围",
+        "酒店套房，香槟和玫瑰，丝绸床单，暖色灯，夜晚",
+        "私密更衣室，镜子，暖光，香水瓶，安静氛围",
+        "浴室，雾气，浴缸边缘，蜡烛，低调光影",
+        "卧室，白色床单，晨光透过薄纱，安静私密空间",
+        "海景阳台，成年女性，浴袍，夜风，城市灯光",
+    ],
+    "静物": [
+        "黑色蕾丝和丝绸床单，暖色台灯，私密静物",
+        "香水瓶，口红，酒店梳妆台，暖光，低调",
+        "玫瑰花瓣，浴缸边缘，蜡烛，雾气，氛围静物",
+        "丝绸眼罩和手铐，深色床单，柔和侧光，成人静物",
+    ],
+}
+NSFW_PROMPT_STYLES = {
+    "人物": "电影感",
+    "时尚服装": "电影感",
+    "场景": "电影感",
+    "静物": "写实",
+}
+NSFW_PROMPT_WEIGHTS = {"人物": 6, "时尚服装": 3, "场景": 2, "静物": 1}
 RANDOM_PROMPTS = [text for texts in RANDOM_PROMPT_LIBRARY.values() for text in texts]
 RANDOM_PROMPT_CATEGORY_STYLES = {
     "人物": "电影感",
@@ -985,7 +1030,9 @@ class PromptWorkbench:
         self.random_library_path = DATA_DIR / "random-library.json"
         self.random_library_error = ""
         self.random_library = rlibrary.default_library(
-            RANDOM_PROMPT_LIBRARY, RANDOM_PROMPT_CATEGORY_STYLES, RANDOM_PROMPT_TEMPLATES)
+            RANDOM_PROMPT_LIBRARY, RANDOM_PROMPT_CATEGORY_STYLES, RANDOM_PROMPT_TEMPLATES,
+            nsfw_categories=NSFW_PROMPT_LIBRARY, nsfw_styles=NSFW_PROMPT_STYLES,
+            nsfw_weights=NSFW_PROMPT_WEIGHTS)
         if self.random_library_path.exists():
             try:
                 self.random_library = rlibrary.load_user(self.random_library_path)
@@ -1918,9 +1965,10 @@ class PromptWorkbench:
                  font=("Microsoft YaHei UI", 8)).pack(side="left")
         tk.Label(random_options, text="范围", bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(6, 0))
+        initial_categories = self._random_categories_for_mode()
         self.random_category_combo = ttk.Combobox(
             random_options, textvariable=self.random_category_var, width=7, state="readonly",
-            values=["混合", *self.random_library["categories"].keys()], font=("Microsoft YaHei UI", 8))
+            values=["混合", *initial_categories], font=("Microsoft YaHei UI", 8))
         self.random_category_combo.pack(side="left", padx=(2, 6))
         self.random_category_combo.bind("<<ComboboxSelected>>", self._on_random_category_change)
         tk.Label(random_options, text="方式", bg=COLORS["panel"], fg=COLORS["muted"],
@@ -1930,7 +1978,7 @@ class PromptWorkbench:
             values=list(rlibrary.MODES), font=("Microsoft YaHei UI", 8))
         self.random_mode_combo.pack(side="left", padx=(2, 8))
         self.random_mode_combo.bind("<<ComboboxSelected>>", self._on_random_mode_change)
-        tk.Label(random_options, text="精选=完整句库，模板=组合生成，混合=两者随机（默认精选）",
+        tk.Label(random_options, text="SFW/NSFW 独立库 · 精选=完整句库，模板=组合，混合=两者随机（默认精选）",
                  bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 8)).pack(side="left")
 
@@ -2700,6 +2748,8 @@ class PromptWorkbench:
         self._update_beginner_base_label()
         self._update_base_recommendation()
         self._beginner_style_select_highlight()
+        if hasattr(self, "random_category_combo"):
+            self._refresh_random_library_choices()
 
     def _beginner_base(self):
         return next((x for x in BEGINNER_BASES if x["key"] == self.beginner_base_key), BEGINNER_BASES[0])
@@ -4329,8 +4379,13 @@ LoRA 目标目录：{lora_root}
         self._save_settings()
         self.status_var.set(f"随机方式：{self.random_mode_var.get()}")
 
+    def _random_categories_for_mode(self):
+        if (self.mode.get() == "NSFW" and self.random_library.get("nsfw_categories")):
+            return list(self.random_library["nsfw_categories"].keys())
+        return list(self.random_library["categories"].keys())
+
     def _refresh_random_library_choices(self):
-        categories = ["混合", *self.random_library["categories"].keys()]
+        categories = ["混合", *self._random_categories_for_mode()]
         if self.random_category_var.get() not in categories:
             self.random_category_var.set("混合")
         if hasattr(self, "random_category_combo"):
@@ -4385,7 +4440,9 @@ LoRA 目标目录：{lora_root}
             messagebox.showerror(APP_NAME, f"恢复失败：\n{e}", parent=self.root)
             return
         self.random_library = rlibrary.default_library(
-            RANDOM_PROMPT_LIBRARY, RANDOM_PROMPT_CATEGORY_STYLES, RANDOM_PROMPT_TEMPLATES)
+            RANDOM_PROMPT_LIBRARY, RANDOM_PROMPT_CATEGORY_STYLES, RANDOM_PROMPT_TEMPLATES,
+            nsfw_categories=NSFW_PROMPT_LIBRARY, nsfw_styles=NSFW_PROMPT_STYLES,
+            nsfw_weights=NSFW_PROMPT_WEIGHTS)
         self.random_library_error = ""
         self._reload_random_library()
         self.status_var.set("已恢复内置随机库")
@@ -4431,7 +4488,8 @@ LoRA 目标目录：{lora_root}
         picked = None
         for _ in range(8):
             try:
-                picked = rlibrary.pick(self.random_library, category, mode)
+                picked = rlibrary.pick(self.random_library, category, mode,
+                                       sfw=self.mode.get() == "SFW")
             except Exception as e:
                 self.status_var.set(f"随机库不可用：{e}")
                 return
@@ -4450,9 +4508,10 @@ LoRA 目标目录：{lora_root}
             if base_key != self.beginner_base_key:
                 self._select_beginner_base(base_key)
             self.status_var.set(
-                f"已随机填入（{picked.get('category')}/{picked.get('mode')}），自动匹配：{style} · {base_note}")
+                f"已随机填入（{picked.get('section')} · {picked.get('category')}/{picked.get('mode')}），自动匹配：{style} · {base_note}")
         else:
-            self.status_var.set(f"已随机填入（{picked.get('category')}/{picked.get('mode')}），可继续修改")
+            self.status_var.set(
+                f"已随机填入（{picked.get('section')} · {picked.get('category')}/{picked.get('mode')}），可继续修改")
 
     def _beginner_inspire(self, kind):
         values = BEGINNER_INSPIRATION.get(kind) or []

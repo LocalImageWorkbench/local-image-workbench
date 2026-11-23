@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""V5 random prompt library: curated prompts + template combinations."""
+"""V5 random prompt library: SFW/NSFW sections, curated and template prompts."""
 
 from __future__ import annotations
 
@@ -20,7 +20,9 @@ class LibraryError(ValueError):
     pass
 
 
-def default_library(categories, styles=None, templates=None):
+def default_library(categories, styles=None, templates=None,
+                    nsfw_categories=None, nsfw_styles=None, nsfw_templates=None,
+                    nsfw_weights=None):
     """Build a normalized library from the app's built-in constants."""
     styles = styles or {}
     out = {"version": 1, "categories": {}, "templates": {}}
@@ -31,21 +33,28 @@ def default_library(categories, styles=None, templates=None):
         }
     for name, tpl in (templates or {}).items():
         out["templates"][name] = copy.deepcopy(tpl)
+    if nsfw_categories:
+        nsfw_styles = nsfw_styles or {}
+        nsfw_weights = nsfw_weights or {}
+        out["nsfw_categories"] = {}
+        for name, prompts in nsfw_categories.items():
+            out["nsfw_categories"][name] = {
+                "style": nsfw_styles.get(name, "电影感"),
+                "prompts": list(prompts),
+                "weight": nsfw_weights.get(name, 1),
+            }
+        out["nsfw_templates"] = copy.deepcopy(nsfw_templates or {})
     return normalize(out)
 
 
-def normalize(data):
-    if not isinstance(data, dict):
-        raise LibraryError("随机库必须是 JSON 对象")
-    categories = data.get("categories")
-    templates = data.get("templates", {})
+def _normalize_section(categories, templates, start_total=0):
     if not isinstance(categories, dict) or not categories:
-        raise LibraryError("缺少 categories，或分类为空")
+        raise LibraryError("分类必须是非空对象")
     if not isinstance(templates, dict):
         raise LibraryError("templates 必须是对象")
-
-    out = {"version": 1, "categories": {}, "templates": {}}
-    total = 0
+    out_categories = {}
+    out_templates = {}
+    total = start_total
     for raw_name, raw in categories.items():
         name = str(raw_name).strip()
         if not name or len(name) > MAX_CATEGORY_NAME:
@@ -59,24 +68,26 @@ def normalize(data):
             if not isinstance(item, str):
                 continue
             item = item.strip()
-            if not item:
-                continue
-            prompts.append(item)
+            if item:
+                prompts.append(item)
         if not prompts:
             raise LibraryError(f"分类“{name}”没有有效提示词")
         total += len(prompts)
         if total > MAX_PROMPTS:
             raise LibraryError(f"提示词总数超过 {MAX_PROMPTS}")
-        out["categories"][name] = {
+        try:
+            weight = max(0.1, float(raw.get("weight", 1)))
+        except (TypeError, ValueError):
+            weight = 1.0
+        out_categories[name] = {
             "style": str(raw.get("style") or "写实").strip() or "写实",
             "prompts": prompts,
+            "weight": weight,
         }
 
     for raw_name, raw in templates.items():
         name = str(raw_name).strip()
-        if name not in out["categories"]:
-            continue
-        if not isinstance(raw, dict):
+        if name not in out_categories or not isinstance(raw, dict):
             continue
         fmt = str(raw.get("format") or "").strip()
         parts = raw.get("parts")
@@ -94,13 +105,25 @@ def normalize(data):
         needed = set(PLACEHOLDER.findall(fmt))
         if not needed or not needed.issubset(clean_parts.keys()):
             continue
-        out["templates"][name] = {
-            "style": str(raw.get("style") or out["categories"][name]["style"]).strip(),
+        out_templates[name] = {
+            "style": str(raw.get("style") or out_categories[name]["style"]).strip(),
             "format": fmt,
             "parts": clean_parts,
         }
-    if not out["categories"]:
-        raise LibraryError("没有可用分类")
+    return out_categories, out_templates, total
+
+
+def normalize(data):
+    if not isinstance(data, dict):
+        raise LibraryError("随机库必须是 JSON 对象")
+    categories, templates, total = _normalize_section(
+        data.get("categories"), data.get("templates", {}))
+    out = {"version": 1, "categories": categories, "templates": templates}
+    if data.get("nsfw_categories"):
+        nsfw_cats, nsfw_tpls, total = _normalize_section(
+            data.get("nsfw_categories"), data.get("nsfw_templates", {}), total)
+        out["nsfw_categories"] = nsfw_cats
+        out["nsfw_templates"] = nsfw_tpls
     return out
 
 
@@ -120,11 +143,23 @@ def save_user(path, data):
     tmp.replace(path)
 
 
-def _categories(data, category):
-    cats = data["categories"]
-    if category in cats:
-        return [(category, cats[category])]
-    return list(cats.items())
+def _section(data, sfw):
+    if not sfw and data.get("nsfw_categories"):
+        return data["nsfw_categories"], data.get("nsfw_templates", {}), "NSFW"
+    return data["categories"], data.get("templates", {}), "SFW"
+
+
+def _weighted_choice(items, rng):
+    total = sum(float(cat.get("weight", 1)) for _, cat in items)
+    if total <= 0:
+        return rng.choice(items)
+    point = rng.random() * total
+    acc = 0.0
+    for item in items:
+        acc += float(item[1].get("weight", 1))
+        if point <= acc:
+            return item
+    return items[-1]
 
 
 def _template_text(template, rng):
@@ -135,26 +170,38 @@ def _template_text(template, rng):
         return ""
 
 
-def pick(data, category=MIXED, mode="混合", rng=None):
+def pick(data, category=MIXED, mode="混合", sfw=True, rng=None):
     rng = rng or random
     data = normalize(data) if "version" not in data else data
-    choices = _categories(data, category)
+    cats, templates, section = _section(data, sfw)
+    if not cats and not sfw:
+        cats, templates, section = data["categories"], data.get("templates", {}), "SFW"
+    if category in cats:
+        choices = [(category, cats[category])]
+    elif category != MIXED:
+        # SFW 绝不能回退到 NSFW；NSFW 缺分类才回退 SFW
+        other = data.get("nsfw_categories", {}) if cats is data["categories"] else data["categories"]
+        if not sfw and category in other:
+            choices = [(category, other[category])]
+            templates = data.get("templates", {}) if cats is data.get("nsfw_categories") else data.get("nsfw_templates", {})
+            section = "SFW" if cats is data.get("nsfw_categories") else "NSFW"
+        else:
+            choices = list(cats.items())
+    else:
+        choices = list(cats.items())
     if not choices:
         raise LibraryError("没有可用分类")
-    if category == MIXED:
-        name, cat = rng.choice(choices)
-    else:
-        name, cat = choices[0]
+    name, cat = _weighted_choice(choices, rng) if category == MIXED else choices[0]
 
-    template = data.get("templates", {}).get(name)
+    template = templates.get(name)
     use_template = template is not None and mode in ("模板", "混合")
     if mode == "混合" and template is not None:
         use_template = rng.random() < 0.5
     if use_template:
         text = _template_text(template, rng)
         if text:
-            return {"text": text, "category": name,
+            return {"text": text, "category": name, "section": section,
                     "style": template.get("style") or cat.get("style", "写实"),
                     "mode": "模板"}
-    return {"text": rng.choice(cat["prompts"]), "category": name,
+    return {"text": rng.choice(cat["prompts"]), "category": name, "section": section,
             "style": cat.get("style", "写实"), "mode": "精选"}

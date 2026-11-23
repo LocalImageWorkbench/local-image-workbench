@@ -190,3 +190,8 @@ python -m unittest discover -s tests -v
 - 精选库（默认）+ 模板组合 + 混合三种方式
 - 支持导入/导出 andom-library.json`n
 
+
+## SFW / NSFW 随机库
+
+SFW 与 NSFW 使用独立提示词库；NSFW 混合时按权重偏向人物/私房，SFW 模式不会回退到 NSFW。
+
