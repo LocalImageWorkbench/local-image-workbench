@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5-beta
+
+- 随机库“范围”下拉框加宽，长分类名不再被截断。
+- 随机库说明文字收短，避免挤压下拉框。
+
+
 ## 0.5.4-beta
 
 - 修复简洁模式白色结果画布高度为 0、看起来仍是一块空白的问题。
@@ -127,6 +133,7 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
 

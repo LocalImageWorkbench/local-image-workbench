@@ -1,7 +1,7 @@
 {
-  "version": "0.5.4-beta",
-  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.4-beta",
-  "notes": "0.5.4-beta：修复白色结果画布高度，生成图自动铺入；0.5 系列宣传片同步发布。",
+  "version": "0.5.5-beta",
+  "url": "https://github.com/LocalImageWorkbench/local-image-workbench/releases/tag/v0.5.5-beta",
+  "notes": "0.5.5-beta：随机库范围下拉框加宽，长分类名不再截断。",
   "requires": {
     "windows": "Windows 10/11",
     "python": "便携版已内置；源码版 3.10+",
@@ -9,7 +9,7 @@
     "ollama": "可访问 /api/tags 或兼容 OpenAI 接口"
   },
   "assets": {
-    "portable_zip": "local-image-workbench-0.5.4-beta-portable.zip",
-    "sha256": "391aedc747d4c9728f707d5a9c728a9f6529c817ba1270595a790fbe1435e168"
+    "portable_zip": "local-image-workbench-0.5.5-beta-portable.zip",
+    "sha256": "f7a6c236defa14f9c8eca7cc0d435fa789ac6363d854d6ffcdfd446defd76e86"
   }
 }

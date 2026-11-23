@@ -52,7 +52,7 @@ EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.5.4-beta"
+    APP_VERSION = "0.5.5-beta"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -2030,7 +2030,7 @@ class PromptWorkbench:
                  font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(6, 0))
         initial_categories = self._random_categories_for_mode()
         self.random_category_combo = ttk.Combobox(
-            random_options, textvariable=self.random_category_var, width=7, state="readonly",
+            random_options, textvariable=self.random_category_var, width=13, state="readonly",
             values=["混合", *initial_categories], font=("Microsoft YaHei UI", 8))
         self.random_category_combo.pack(side="left", padx=(2, 6))
         self.random_category_combo.bind("<<ComboboxSelected>>", self._on_random_category_change)
@@ -2041,7 +2041,7 @@ class PromptWorkbench:
             values=list(rlibrary.MODES), font=("Microsoft YaHei UI", 8))
         self.random_mode_combo.pack(side="left", padx=(2, 8))
         self.random_mode_combo.bind("<<ComboboxSelected>>", self._on_random_mode_change)
-        tk.Label(random_options, text="SFW/NSFW 独立库 · 精选=完整句库，模板=组合，混合=两者随机（默认精选）",
+        tk.Label(random_options, text="SFW/NSFW 独立库 · 精选/模板/混合",
                  bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 8)).pack(side="left")
 
@@ -7685,6 +7685,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
