@@ -2221,6 +2221,15 @@ class PromptWorkbench:
         if not hasattr(self, "beginner_base_label"):
             return
         base = self._beginner_base()
+        note = base["note"]
+        if self.mode.get() == "SFW":
+            note = {
+                "illustrious": "二次元通用",
+                "moss": "MOSS Image · SFW 需控制提示词",
+                "krea2": "摄影感",
+                "qwen": "通用/写实",
+                "anima": "二次元",
+            }.get(base["key"], note)
         suffix = " · NSFW 需匹配 LoRA" if self.mode.get() == "NSFW" and base["key"] != "moss" else ""
         vram = int(getattr(self, "gpu_vram_mb", 0) or 0)
         need = BASE_VRAM_REQUIREMENTS.get(base["key"], 0)
@@ -2228,7 +2237,7 @@ class PromptWorkbench:
         if shortage:
             suffix += f" · ⚠ 显存偏低（约需 {need / 1024:.0f}GB）"
         self.beginner_base_label.configure(
-            text=f"{base['note']}{suffix}",
+            text=f"{note}{suffix}",
             fg=COLORS["red"] if shortage else COLORS["accent2"])
 
     def _recommended_beginner_base(self):
