@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0-preview
+
+- 新增统一任务状态、ComfyUI/LLM 服务状态和 GenerationRequest。
+- 错误分类、模型目录 30 秒缓存、原子 JSON 写入、JSONL 诊断日志。
+- 设置页拆分为环境与路径、生成行为、更新、引导四个 Tab。
+- Seed 改为随机/固定开关，显示本次实际 Seed，可固定并写入历史。
+- 快捷键 Ctrl+S / Ctrl+L / Ctrl+F / Ctrl+Z；清空提示词可撤销。
+- 主按钮层级调整，“重新写提示词/改写提示词/推荐 LoRA”降为次操作。
+- 更新日志和使用说明改为软件内阅读，不依赖 Markdown 关联。
+- 0.4 预览包附加《使用说明.md》。
+
+
 ## 0.3.0-beta
 
 - 高级模式 P0/P1/P2 改造：就绪状态条、参数面板、LoRA 管理、工作流导入校验、提示词计数、结果对比、折叠参数、状态记忆。
@@ -74,5 +86,6 @@
 - Multi-LoRA automatic governance.
 - Bundled prompt skills (license review pending).
 - Windows-only, no installer yet.
+
 
 
