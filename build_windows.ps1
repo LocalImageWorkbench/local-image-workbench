@@ -31,5 +31,6 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $dist = Join-Path $PSScriptRoot "dist\PromptWorkbench"
-Copy-Item README.md, LICENSE, THIRD_PARTY_NOTICES.md, CHANGELOG.md -Destination $dist -Force
+Copy-Item README.md, LICENSE, THIRD_PARTY_NOTICES.md, CHANGELOG.md, 使用说明.md -Destination $dist -Force
 Write-Host "Built: $dist\PromptWorkbench.exe"
+

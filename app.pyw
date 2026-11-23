@@ -34,6 +34,7 @@ from tkinter.scrolledtext import ScrolledText
 
 import workbench_generate as wbgen
 import workflow_import as wfimport
+import core_state as core
 import lora_match
 import config as appconfig
 import llm_client
@@ -44,10 +45,11 @@ APP_NAME = "本地出图工作台"
 DISPLAY_TAGLINE = "提示词工作台 · 快捷本地出图"
 CFG = appconfig.load_config()
 APP_DIR = appconfig.resource_path("")
+EXTERNAL_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else APP_DIR
 try:
     APP_VERSION = (APP_DIR / "VERSION").read_text(encoding="utf-8").strip()
 except Exception:
-    APP_VERSION = "0.3.0-beta"
+    APP_VERSION = "0.4.0-preview"
 DEFAULT_UPDATE_MANIFEST = (
     "https://raw.githubusercontent.com/LocalImageWorkbench/local-image-workbench/main/update.json"
 )
@@ -137,32 +139,88 @@ BEGINNER_RATIOS = {
     "横图": (1216, 832),
 }
 BEGINNER_DEFAULT_PROMPT = "雪山脚下的湖泊，清晨薄雾，远处日照金山，宁静的电影感风景摄影"
-RANDOM_PROMPTS = [
-    "雪山脚下的湖泊，清晨薄雾，远处日照金山，宁静的电影感风景摄影",
-    "雨后竹林小径，湿润石板路，柔和的散射光，清新的东方意境",
-    "秋日森林溪流，金黄落叶，慢门流水，温暖的午后阳光，自然摄影",
-    "海边白色灯塔，黄昏云层，长曝光海浪，孤独而安静的氛围",
-    "薰衣草花田，远山和晚霞，微风起伏，柔和的胶片色彩",
-    "雨夜城市小巷，霓虹招牌倒映在积水里，电影感街景，无人",
-    "未来城市天际线，清晨云海，玻璃幕墙反射天光，科幻概念设计",
-    "老上海街角，梧桐树影，复古电车，暖色调纪实摄影",
-    "安静的木屋图书馆，高窗透入阳光，漂浮的灰尘，温暖的室内场景",
-    "橘猫趴在窗台，午后阳光，绿植和旧书，柔软的生活感照片",
-    "雪地里的赤狐，回眸，冬日森林背景，浅景深野生动物摄影",
-    "鲸鱼在云层上方游动，超现实风景，柔和月光，梦幻插画",
-    "猫头鹰停在古老树枝上，夜色和薄雾，细节丰富的自然摄影",
-    "早餐桌，手冲咖啡和可颂，晨光穿过窗帘，温暖的生活方式摄影",
-    "陶罐里的野花，粗糙桌面，侧光，极简静物摄影",
-    "太空站舷窗，蓝色行星和星云，冷色调科幻场景，电影概念图",
-    "漂浮在云海上的小岛，瀑布流向天空，奇幻风景插画",
-    "被植物覆盖的机械废墟，晨雾，藤蔓和齿轮，安静的科幻场景",
-    "复古跑车行驶在山路，黄昏逆光，公路旅行摄影",
-    "蒸汽火车穿过雪原，白色蒸汽，远处山脉，怀旧电影感",
-    "沙漠夜空，银河和篝火，远处帐篷，广角星空摄影",
-    "热带雨林瀑布，阳光穿过树冠，水雾和苔藓，生机勃勃的自然景观",
-    "冬日湖边小屋，屋顶积雪，窗户透出暖光，蓝调时刻",
-    "手工陶瓷工作台，未完成的陶罐，泥土和工具，安静的纪实静物",
-]
+RANDOM_PROMPT_LIBRARY = {
+    "人物": [
+        "银发成年女性，雨夜霓虹街头，黑色风衣，温柔地看着镜头，电影感人像",
+        "成年男性，白色衬衫，海边黄昏，侧脸逆光，安静的氛围感照片",
+        "成年女性，白色长裙，森林晨雾，回眸微笑，柔和的自然光",
+        "银发成年女性，未来城市天台，机械耳机，俯瞰城市灯光，赛博朋克插画",
+        "成年男性，黑色高领毛衣，窗边雨天，安静阅读，柔光肖像",
+        "成年女性，复古西装，老上海街角，梧桐树影，电影感",
+        "成年男性，登山外套，雪山营地，清晨薄雾，纪实旅行肖像",
+        "成年女性，陶艺工作台，围裙，手上沾着泥土，自然窗光",
+        "成年男性，爵士酒吧，萨克斯，暖色舞台灯，纪实抓拍",
+        "成年女性，舞者，空旷剧场，侧逆光，动态人像",
+        "成年男性，厨师，厨房蒸汽，暖光，生活感抓拍",
+        "成年女性，画家，画室，颜料和画笔，窗边自然光",
+        "成年男性，机车骑手，公路黄昏，皮夹克，电影感",
+        "成年女性，图书管理员，旧图书馆，木质梯子，暖色台灯",
+    ],
+    "场景": [
+        "雪山脚下的湖泊，清晨薄雾，远处日照金山，宁静的电影感风景摄影",
+        "雨后竹林小径，湿润石板路，柔和的散射光，清新的东方意境",
+        "秋日森林溪流，金黄落叶，慢门流水，温暖的午后阳光，自然摄影",
+        "海边白色灯塔，黄昏云层，长曝光海浪，孤独而安静的氛围",
+        "薰衣草花田，远山和晚霞，微风起伏，柔和的胶片色彩",
+        "雨夜城市小巷，霓虹招牌倒映在积水里，电影感街景，无人",
+        "老上海街角，梧桐树影，复古电车，暖色调纪实摄影",
+        "安静的木屋图书馆，高窗透入阳光，漂浮的灰尘，温暖的室内场景",
+        "复古跑车行驶在山路，黄昏逆光，公路旅行摄影",
+        "蒸汽火车穿过雪原，白色蒸汽，远处山脉，怀旧电影感",
+        "沙漠夜空，银河和篝火，远处帐篷，广角星空摄影",
+        "热带雨林瀑布，阳光穿过树冠，水雾和苔藓，生机勃勃的自然景观",
+        "冬日湖边小屋，屋顶积雪，窗户透出暖光，蓝调时刻",
+        "凌晨的海边公路，雨后反光，远处渔港灯火，安静的电影感",
+    ],
+    "动物": [
+        "橘猫趴在窗台，午后阳光，绿植和旧书，柔软的生活感照片",
+        "雪地里的赤狐，回眸，冬日森林背景，浅景深野生动物摄影",
+        "猫头鹰停在古老树枝上，夜色和薄雾，细节丰富的自然摄影",
+        "鲸鱼在云层上方游动，超现实风景，柔和月光，梦幻插画",
+        "晨雾中的梅花鹿，林间逆光，露水，安静的自然摄影",
+        "悬崖上的金雕，展开翅膀，海风，低角度纪实",
+        "草地上的垂耳兔，野花，柔和侧光，浅景深",
+        "海边奔跑的白马，浪花，黄昏逆光，动态抓拍",
+    ],
+    "静物": [
+        "早餐桌，手冲咖啡和可颂，晨光穿过窗帘，温暖的生活方式摄影",
+        "陶罐里的野花，粗糙桌面，侧光，极简静物摄影",
+        "手工陶瓷工作台，未完成的陶罐，泥土和工具，安静的纪实静物",
+        "旧木桌上的黄铜怀表，划痕，窗边侧光，极简静物",
+        "堆叠的旧书和一杯茶，午后光斑，安静的室内",
+        "复古胶片相机，皮革背带，深色桌面，柔和轮廓光",
+        "白瓷盘里的无花果和坚果，深色背景，油画质感",
+        "雨后的玻璃窗，水珠，窗外模糊的街灯，氛围静物",
+    ],
+    "科幻奇幻": [
+        "未来城市天际线，清晨云海，玻璃幕墙反射天光，科幻概念设计",
+        "太空站舷窗，蓝色行星和星云，冷色调科幻场景，电影概念图",
+        "漂浮在云海上的小岛，瀑布流向天空，奇幻风景插画",
+        "被植物覆盖的机械废墟，晨雾，藤蔓和齿轮，安静的科幻场景",
+        "赛博朋克夜市，全息招牌，雨后反光，行人剪影，电影概念图",
+        "沙漠中的巨型环形遗迹，风沙，落日，史诗科幻场景",
+        "水晶洞穴，发光矿脉，蓝色雾气，奇幻探索场景",
+        "云端的古代飞船，破损风帆，晨光，奇幻插画",
+        "机器人园丁在温室里修剪植物，暖光，安静科幻",
+        "漂浮的图书馆，书本在失重中打开，金色尘埃，奇幻概念图",
+    ],
+}
+RANDOM_PROMPTS = [text for texts in RANDOM_PROMPT_LIBRARY.values() for text in texts]
+RANDOM_PROMPT_CATEGORY_STYLES = {
+    "人物": "电影感",
+    "场景": "电影感",
+    "动物": "写实",
+    "静物": "写实",
+    "科幻奇幻": "插画",
+}
+RANDOM_PROMPT_STYLE_RULES = (
+    (("鲸鱼", "小岛", "奇幻", "插画", "云层上方", "飞船", "水晶洞穴"), "插画"),
+    (("太空", "未来", "科幻", "机械", "霓虹", "赛博", "机器人"), "赛博朋克"),
+    (("雨夜", "城市", "街角", "黄昏", "蓝调", "胶片", "电影", "舞者", "爵士"), "电影感"),
+    (("水彩", "柔和", "梦幻", "薰衣草"), "水彩"),
+    (("写实", "摄影", "橘猫", "赤狐", "猫头鹰", "梅花鹿", "金雕", "垂耳兔", "白马",
+      "静物", "早餐", "陶", "火车", "跑车", "怀表", "相机"), "写实"),
+)
 BEGINNER_INSPIRATION = {
     "随机": [
         "银发成年女性，雨夜霓虹街头，黑色风衣，温柔地看着镜头，电影感人像",
@@ -555,8 +613,7 @@ def load_json(path: Path, default):
 
 
 def save_json(path: Path, value) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    core.atomic_write_json(path, value)
 
 
 def humanize_error(message):
@@ -765,8 +822,12 @@ class PromptWorkbench:
         center_window_adaptive(self.root, 1320, 860)
         self.root.configure(bg=COLORS["bg"])
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.root.bind("<Control-Return>", lambda e: self.generate())
+        self.root.bind_all("<Control-Return>", lambda e: self._shortcut_generate_images())
         self.root.bind_all("<Control-q>", lambda e: self._exit_app())
+        self.root.bind_all("<Control-s>", lambda e: self.save_version())
+        self.root.bind_all("<Control-l>", lambda e: self._focus_prompt_editor())
+        self.root.bind_all("<Control-f>", lambda e: self._focus_workflow_search())
+        self.root.bind_all("<Control-z>", lambda e: self._undo_clear())
 
         try:
             self.root.iconbitmap(str(APP_ICON))
@@ -777,6 +838,11 @@ class PromptWorkbench:
         WORKBENCH_LIBRARY.mkdir(parents=True, exist_ok=True)
 
         self.settings = load_json(SETTINGS_FILE, {})
+        self.task = core.TaskController()
+        self.services = core.ServiceRegistry()
+        self.diagnostics = core.JsonlDiagnostics(LOG_DIR / "diagnostics.jsonl")
+        self.current_request = None
+        self._model_cache = {}
         self.records = load_json(HISTORY_FILE, [])
         if not isinstance(self.records, list):
             self.records = []
@@ -800,6 +866,7 @@ class PromptWorkbench:
         self.generation_workflow_var = tk.StringVar(value="")
         self.workflow_search_var = tk.StringVar(value="")
         self.advanced_seed_var = tk.StringVar(value=str(self.settings.get("advanced_seed", "0")))
+        self.seed_random_var = tk.BooleanVar(value=bool(self.settings.get("advanced_seed_random", True)))
         self.advanced_steps_var = tk.StringVar(value=str(self.settings.get("advanced_steps", "")))
         self.advanced_cfg_var = tk.StringVar(value=str(self.settings.get("advanced_cfg", "")))
         self.advanced_sampler_var = tk.StringVar(value=str(self.settings.get("advanced_sampler", "")))
@@ -811,6 +878,7 @@ class PromptWorkbench:
         self._last_generated_seed = self.settings.get("last_seed")
         last_seed = self._last_generated_seed if self._last_generated_seed is not None else "—"
         self.last_seed_text = tk.StringVar(value=f"本次实际 seed：{last_seed}")
+        self._prompt_undo = None
         self.lora_rec_rows = []
         self._manual_links = set()
         self._link_done = False
@@ -829,6 +897,10 @@ class PromptWorkbench:
         self.beginner_style = tk.StringVar(value=self.settings.get("beginner_style", "无风格"))
         if self.beginner_style.get() not in ("二次元", "电影感", "插画", "写实", "赛博朋克", "水彩", "无风格"):
             self.beginner_style.set("无风格")
+        self.random_auto_match_var = tk.BooleanVar(value=bool(self.settings.get("random_auto_match", True)))
+        self.random_category_var = tk.StringVar(value=self.settings.get("random_category", "混合"))
+        if self.random_category_var.get() not in ("混合", *RANDOM_PROMPT_LIBRARY.keys()):
+            self.random_category_var.set("混合")
         self.beginner_ratio = tk.StringVar(value=self.settings.get("beginner_ratio", "竖图"))
         if self.beginner_ratio.get() not in BEGINNER_RATIOS:
             self.beginner_ratio.set("竖图")
@@ -1031,6 +1103,8 @@ class PromptWorkbench:
         self.nav_tool80 = self._btn(nav, "8.0 精修", self.open_tool80, COLORS["panel"], COLORS["muted"], icon="edit")
         self.nav_tool80.pack(fill="x", pady=3)
         self._btn(nav, "环境设置", self.open_settings_dialog, COLORS["panel"], COLORS["muted"], icon="settings").pack(fill="x", pady=3)
+        self._btn(nav, "使用说明", self.open_user_guide, COLORS["panel"], COLORS["muted"], icon="help").pack(fill="x", pady=3)
+        self._btn(nav, "快捷键", self.open_shortcuts, COLORS["panel"], COLORS["muted"], icon="help").pack(fill="x", pady=3)
         self._btn(nav, "模型指南", self.open_model_guide, COLORS["panel"], COLORS["muted"], icon="help").pack(fill="x", pady=3)
         self._btn(nav, "模型中心", self.open_model_center, COLORS["panel"], COLORS["muted"], icon="cloud").pack(fill="x", pady=3)
         self._btn(nav, "检查更新", self.check_updates, COLORS["panel"], COLORS["muted"], icon="refresh").pack(fill="x", pady=3)
@@ -1140,12 +1214,18 @@ class PromptWorkbench:
         def param_entry(label, var, width=7):
             tk.Label(params_inner, text=label, bg=COLORS["card2"], fg=COLORS["muted"],
                      font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 3))
-            tk.Entry(params_inner, textvariable=var, width=width, bg=COLORS["input"],
-                     fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat", bd=0,
-                     font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 8), ipady=3)
-        param_entry("Seed", self.advanced_seed_var, 11)
-        tk.Label(params_inner, text="0=随机", bg=COLORS["card2"], fg=COLORS["muted"],
-                 font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(0, 8))
+            ent = tk.Entry(params_inner, textvariable=var, width=width, bg=COLORS["input"],
+                           fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat", bd=0,
+                           font=("Microsoft YaHei UI", 9))
+            ent.pack(side="left", padx=(0, 8), ipady=3)
+            return ent
+        self.seed_entry = param_entry("Seed", self.advanced_seed_var, 11)
+        if self.seed_random_var.get():
+            self.seed_entry.configure(state="disabled")
+        tk.Checkbutton(params_inner, text="随机", variable=self.seed_random_var,
+                       command=self._toggle_seed_mode, bg=COLORS["card2"], fg=COLORS["muted"],
+                       activebackground=COLORS["card2"], selectcolor=COLORS["input"],
+                       font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(0, 8))
         param_entry("Steps", self.advanced_steps_var, 5)
         param_entry("CFG", self.advanced_cfg_var, 5)
         tk.Label(params_inner, text="Sampler", bg=COLORS["card2"], fg=COLORS["muted"],
@@ -1210,15 +1290,15 @@ class PromptWorkbench:
 
         adjust_row = tk.Frame(left, bg=COLORS["panel"])
         adjust_row.pack(fill="x", padx=12, pady=(0, 8))
-        tk.Label(adjust_row, text="继续调整", bg=COLORS["panel"], fg=COLORS["muted"],
+        tk.Label(adjust_row, text="改写提示词", bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 5))
         self.refine_entry = tk.Entry(adjust_row, bg=COLORS["input"], fg=COLORS["text"],
                                      insertbackground=COLORS["text"], relief="flat", bd=0,
                                      highlightbackground=COLORS["line"], highlightcolor=COLORS["accent"],
                                      highlightthickness=1, font=FONT_SMALL)
         self.refine_entry.pack(side="left", fill="x", expand=True, ipady=4)
-        self.refine_btn = self._btn(adjust_row, "继续调整", self.refine_prompt,
-                                     COLORS["accent"], "#fff", icon="edit")
+        self.refine_btn = self._btn(adjust_row, "改写提示词", self.refine_prompt,
+                                     COLORS["card2"], COLORS["text"], icon="edit")
         self.refine_btn.pack(side="left", padx=(6, 0))
         self.root.bind("<Control-Shift-Return>", lambda e: self.refine_prompt())
 
@@ -1278,7 +1358,7 @@ class PromptWorkbench:
         lora_actions = tk.Frame(lora_box, bg=COLORS["card2"])
         lora_actions.pack(fill="x", padx=8, pady=(0, 6))
         self.lora_recommend_btn = self._btn(lora_actions, "推荐 LoRA", self._recommend_lora_inline,
-                                            COLORS["accent"], "#fff")
+                                            COLORS["card2"], COLORS["text"])
         self.lora_recommend_btn.pack(side="left")
         ttk.Checkbutton(lora_actions, text="自动选 LoRA", variable=self.auto_pick_var,
                         command=self._save_settings).pack(side="left", padx=(8, 0))
@@ -1306,12 +1386,12 @@ class PromptWorkbench:
                        fg="#8a93a6", font=("Microsoft YaHei UI", 9))
         tip.pack(anchor="w", padx=14, pady=(0, 6))
 
-        self.generate_btn = self._btn(left, "新开一个", self.generate,
-                                      COLORS["accent"], "#fff", font=("Microsoft YaHei UI", 10, "bold"),
+        self.generate_btn = self._btn(left, "重新写提示词", self.generate,
+                                      COLORS["card2"], COLORS["text"], font=("Microsoft YaHei UI", 10, "bold"),
                                       icon="sparkles")
         self.generate_btn.configure(pady=9)
         self.generate_btn.pack(fill="x", padx=12, pady=(0, 10))
-        self.generate_btn.bind("<Control-Return>", lambda e: self.generate())
+        self.generate_btn.bind("<Control-Return>", lambda e: self._shortcut_generate_images())
 
         # 右：输出 / 历史
         right = tk.Frame(body, bg=COLORS["panel"], highlightbackground=COLORS["line"], highlightthickness=1)
@@ -1334,6 +1414,8 @@ class PromptWorkbench:
                                  COLORS["accent"], "#fff", font=("Microsoft YaHei UI", 9, "bold"),
                                  icon="play")
         self.gen_btn.pack(side="right")
+        tk.Label(gen_bar, text="Ctrl+Enter", bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 8)).pack(side="right", padx=(0, 6))
         self.auto_match_btn = self._btn(gen_bar, "自动匹配", self.auto_match_loras,
                                         COLORS["card2"], COLORS["text"])
         self.auto_match_btn.pack(side="right", padx=(0, 6))
@@ -1470,6 +1552,10 @@ class PromptWorkbench:
 
         self.advanced_surfaces = [top, body, footer]
         self.beginner_outer = tk.Frame(main, bg=COLORS["bg"])
+        self.beginner_sticky = tk.Frame(self.beginner_outer, bg=COLORS["bg"])
+        self.beginner_sticky.pack(side="bottom", fill="x", padx=24, pady=(0, 10))
+        tk.Label(self.beginner_sticky, text="确认 ComfyUI 状态后开始生成 · Ctrl+Enter 出图", bg=COLORS["bg"],
+                 fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
         self.beginner_canvas = tk.Canvas(self.beginner_outer, bg=COLORS["bg"], highlightthickness=0)
         beginner_scroll = ttk.Scrollbar(self.beginner_outer, orient="vertical",
                                         command=self.beginner_canvas.yview)
@@ -1565,7 +1651,8 @@ class PromptWorkbench:
         self.beginner_base_cards = tk.Frame(base_row, bg=COLORS["panel"])
         self.beginner_base_buttons = []
         for base in BEGINNER_BASES:
-            btn = tk.Button(self.beginner_base_cards, text=f"{base['icon']} {base['label']}",
+            missing_mark = "（未装）" if self._missing_profile_cached(base["workflow"]) else ""
+            btn = tk.Button(self.beginner_base_cards, text=f"{base['icon']} {base['label']}{missing_mark}",
                             command=lambda k=base["key"]: self._select_beginner_base(k),
                             bg=COLORS["card2"], fg=COLORS["text"], relief="flat", bd=0,
                             padx=8, pady=4, font=("Microsoft YaHei UI", 9), cursor="hand2")
@@ -1647,6 +1734,17 @@ class PromptWorkbench:
                   bg=COLORS["card2"], fg=COLORS["accent2"], relief="flat", bd=0,
                   padx=8, pady=3, font=("Microsoft YaHei UI", 9, "bold"), cursor="hand2").pack(
                       side="left", padx=(0, 6))
+        tk.Checkbutton(inspire_row, text="自动匹配", variable=self.random_auto_match_var,
+                       command=self._toggle_random_auto_match, bg=COLORS["panel"], fg=COLORS["muted"],
+                       activebackground=COLORS["panel"], selectcolor=COLORS["input"],
+                       font=("Microsoft YaHei UI", 8)).pack(side="left", padx=(0, 6))
+        tk.Label(inspire_row, text="范围", bg=COLORS["panel"], fg=COLORS["muted"],
+                 font=("Microsoft YaHei UI", 8)).pack(side="left")
+        self.random_category_combo = ttk.Combobox(
+            inspire_row, textvariable=self.random_category_var, width=6, state="readonly",
+            values=["混合", *RANDOM_PROMPT_LIBRARY.keys()], font=("Microsoft YaHei UI", 8))
+        self.random_category_combo.pack(side="left", padx=(2, 6))
+        self.random_category_combo.bind("<<ComboboxSelected>>", self._on_random_category_change)
         tk.Button(inspire_row, text="收藏", command=self._favorite_prompt,
                   bg=COLORS["panel"], fg=COLORS["accent2"], relief="flat", bd=0,
                   padx=5, pady=3, font=("Microsoft YaHei UI", 9), cursor="hand2").pack(
@@ -1721,7 +1819,7 @@ class PromptWorkbench:
                   bg=COLORS["panel"], fg=COLORS["muted"], relief="flat", bd=0,
                   padx=6, pady=4, cursor="hand2").pack(side="left", padx=(8, 0))
         self.beginner_generate_btn = tk.Button(
-            bottom_row, text="开始生成", command=self.beginner_generate,
+            self.beginner_sticky, text="开始生成", command=self.beginner_generate,
             bg=COLORS["accent"], fg="#fff", disabledforeground="#fff",
             activebackground=COLORS["accent2"], activeforeground="#fff",
             relief="flat", bd=0, padx=22, pady=8,
@@ -1738,7 +1836,7 @@ class PromptWorkbench:
         self.beginner_progressbar = ttk.Progressbar(progress_line, orient="horizontal",
                                                      mode="determinate", maximum=4, value=0)
         self.beginner_progressbar.pack(side="left", fill="x", expand=True, padx=(0, 8))
-        self.beginner_stop_btn = tk.Button(progress_line, text="停止", state="disabled",
+        self.beginner_stop_btn = tk.Button(progress_line, text="停止当前", state="disabled",
                                            command=self.stop_beginner_generation,
                                            bg=COLORS["card2"], fg=COLORS["text"],
                                            relief="flat", bd=0, padx=9, pady=2,
@@ -2168,6 +2266,7 @@ class PromptWorkbench:
         self.mode.set(mode)
         self._update_mode_button()
         self.advanced_seed_var.set(str(self.settings.get("advanced_seed", "0")))
+        self.seed_random_var.set(bool(self.settings.get("advanced_seed_random", True)))
         self.advanced_steps_var.set(str(self.settings.get("advanced_steps", "")))
         self.advanced_cfg_var.set(str(self.settings.get("advanced_cfg", "")))
         self.advanced_sampler_var.set(str(self.settings.get("advanced_sampler", "")))
@@ -2224,10 +2323,13 @@ class PromptWorkbench:
             "beginner_mode": bool(self.beginner_mode_var.get()),
             "beginner_base": self.beginner_base_key,
             "beginner_style": self.beginner_style.get(),
+            "random_auto_match": bool(self.random_auto_match_var.get()),
+            "random_category": self.random_category_var.get(),
             "beginner_ratio": self.beginner_ratio.get(),
             "beginner_count": int(self.beginner_count_var.get() or 1),
             "civitai_guide_seen": bool(getattr(self, "civitai_guide_seen", False)),
             "advanced_seed": self.advanced_seed_var.get().strip(),
+            "advanced_seed_random": bool(self.seed_random_var.get()),
             "advanced_steps": self.advanced_steps_var.get().strip(),
             "advanced_cfg": self.advanced_cfg_var.get().strip(),
             "advanced_sampler": self.advanced_sampler_var.get().strip(),
@@ -2482,18 +2584,30 @@ class PromptWorkbench:
         base, reason, vram_text = self._recommended_beginner_base()
         self.beginner_base_reco_key = base["key"]
         prefix = f"{vram_text} · "
-        if self.beginner_base_key == base["key"]:
+        missing = self._missing_profile_cached(base["workflow"])
+        if missing:
+            self.beginner_base_reco_label.configure(
+                text=f"{prefix}推荐（未安装）：{base['label']} · {reason}")
+            self.beginner_base_adopt_btn.configure(text="去模型中心")
+            self.beginner_base_adopt_btn.pack(side="left", padx=(8, 0))
+        elif self.beginner_base_key == base["key"]:
             self.beginner_base_reco_label.configure(
                 text=f"{prefix}推荐：{base['label']} · 已采用")
             self.beginner_base_adopt_btn.pack_forget()
         else:
             self.beginner_base_reco_label.configure(
                 text=f"{prefix}{base['label']} · {reason}（不强制）")
+            self.beginner_base_adopt_btn.configure(text="采用推荐")
             self.beginner_base_adopt_btn.pack(side="left", padx=(8, 0))
 
     def _adopt_recommended_base(self):
-        if self.beginner_base_reco_key:
-            self._select_beginner_base(self.beginner_base_reco_key)
+        if not self.beginner_base_reco_key:
+            return
+        base = next((x for x in BEGINNER_BASES if x["key"] == self.beginner_base_reco_key), None)
+        if base and self._missing_profile_cached(base["workflow"]):
+            self.open_model_center(initial_query=base["label"], initial_kind="底模")
+            return
+        self._select_beginner_base(self.beginner_base_reco_key)
 
     def _update_beginner_base_summary(self):
         if not hasattr(self, "beginner_base_summary"):
@@ -2515,6 +2629,12 @@ class PromptWorkbench:
         base = next((x for x in BEGINNER_BASES if x["key"] == key), None)
         if not base:
             return
+        missing = self._missing_profile_cached(base["workflow"])
+        if missing:
+            self.beginner_base_reco_key = key
+            self._update_base_recommendation()
+            self.status_var.set(f"{base['label']} 未安装，仅作为推荐；请先在模型中心补齐")
+            return
         self.beginner_base_key = key
         for name, btn in getattr(self, "beginner_base_buttons", []):
             if name == key:
@@ -2532,9 +2652,18 @@ class PromptWorkbench:
         self._refresh_beginner_missing()
         self._save_settings()
 
+    def _missing_profile_cached(self, workflow_key):
+        now = time.monotonic()
+        entry = self._model_cache.get(workflow_key)
+        if entry and now - entry[0] < 30:
+            return list(entry[1])
+        missing = model_center.missing_profile_files(CFG, workflow_key, wbgen.MODEL_FILES)
+        self._model_cache[workflow_key] = (now, list(missing))
+        return missing
+
     def _beginner_missing(self):
         base = self._beginner_base()
-        return model_center.missing_profile_files(CFG, base["workflow"], wbgen.MODEL_FILES)
+        return self._missing_profile_cached(base["workflow"])
 
     def _check_models(self):
         base = self._beginner_base()
@@ -2742,6 +2871,10 @@ class PromptWorkbench:
             comfy_fg = COLORS["green"] if comfy_ok else (
                 COLORS["muted"] if "自动启动" in comfy_text else COLORS["red"])
         self.beginner_comfy_status.configure(text=comfy_text, fg=comfy_fg)
+        self.services.set("llm", core.ServiceStatus.READY if llm_ok else core.ServiceStatus.STOPPED,
+                          llm_text)
+        self.services.set("comfyui", core.ServiceStatus.READY if comfy_ok else core.ServiceStatus.STOPPED,
+                          comfy_text)
         self.beginner_prepare_btn.configure(state="normal", text="一键准备")
         self._refresh_beginner_model_status()
         self._update_advanced_status()
@@ -2753,6 +2886,7 @@ class PromptWorkbench:
             return
         self.beginner_comfy_start_btn.configure(state="disabled", text="启动中…")
         self.beginner_comfy_stop_btn.configure(state="disabled")
+        self.services.set("comfyui", core.ServiceStatus.STARTING, "启动中")
         self.beginner_comfy_status.configure(text="ComfyUI … 启动中", fg=COLORS["muted"])
         self.status_var.set("正在启动 ComfyUI…")
 
@@ -2771,6 +2905,7 @@ class PromptWorkbench:
             return
         self.beginner_comfy_stop_btn.configure(state="disabled", text="停止中…")
         self.beginner_comfy_start_btn.configure(state="disabled")
+        self.services.set("comfyui", core.ServiceStatus.STOPPING, "停止中")
         self.beginner_comfy_status.configure(text="ComfyUI … 停止中", fg=COLORS["muted"])
         self.status_var.set("正在停止 ComfyUI…")
 
@@ -3678,7 +3813,7 @@ LoRA 目标目录：{lora_root}
                 return value
             except (TypeError, ValueError):
                 return None
-        seed = _int_or_none(self.advanced_seed_var, 0, 2**31 - 1) or 0
+        seed = 0 if self.seed_random_var.get() else (_int_or_none(self.advanced_seed_var, 0, 2**31 - 1) or 0)
         params = {"seed": seed}
         for key, var in (("steps", self.advanced_steps_var), ("cfg", self.advanced_cfg_var),
                          ("width", self.advanced_width_var), ("height", self.advanced_height_var)):
@@ -3703,6 +3838,9 @@ LoRA 目标目录：{lora_root}
         self._save_settings()
 
     def _reset_advanced_params(self):
+        self.seed_random_var.set(True)
+        if hasattr(self, "seed_entry"):
+            self.seed_entry.configure(state="disabled")
         self.advanced_seed_var.set("0")
         for var in (self.advanced_steps_var, self.advanced_cfg_var, self.advanced_sampler_var,
                     self.advanced_scheduler_var, self.advanced_width_var, self.advanced_height_var):
@@ -3710,11 +3848,25 @@ LoRA 目标目录：{lora_root}
         self.status_var.set("生成参数已恢复工作流默认")
         self._save_settings()
 
+    def _toggle_seed_mode(self):
+        if self.seed_random_var.get():
+            self.advanced_seed_var.set("0")
+            self.seed_entry.configure(state="disabled")
+            self.status_var.set("Seed 已设为随机")
+        else:
+            if self.advanced_seed_var.get().strip() in ("", "0"):
+                self.advanced_seed_var.set(str(random.randint(1, 2**31 - 1)))
+            self.seed_entry.configure(state="normal")
+            self.status_var.set("Seed 已固定，可复现")
+        self._save_settings()
+
     def _lock_last_seed(self):
         seed = self._last_generated_seed
         if seed in (None, ""):
             self.status_var.set("还没有生成记录，无法固定 seed")
             return
+        self.seed_random_var.set(False)
+        self.seed_entry.configure(state="normal")
         self.advanced_seed_var.set(str(seed))
         self._save_settings()
         self.status_var.set(f"已固定 seed：{seed}")
@@ -3735,7 +3887,7 @@ LoRA 目标目录：{lora_root}
             return
         key = wbgen.workflow_for_target(self.target_var.get())
         base_spec = wbgen.WORKFLOWS.get(key) or {}
-        missing = model_center.missing_profile_files(CFG, key, wbgen.MODEL_FILES)
+        missing = self._missing_profile_cached(key)
         lora_base = base_spec.get("base", "")
         incompatible = 0
         for lora in getattr(self, "selected_loras", []):
@@ -3771,7 +3923,7 @@ LoRA 目标目录：{lora_root}
                  font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=20, pady=(16, 4))
         lines = [
             "1. 顶部选 LLM、底模、工作流；缺模型会显示在就绪状态条。",
-            "2. 左侧写需求、继续调整提示词；右侧编辑正向/负向并出图。",
+            "2. 左侧写需求、改写提示词；右侧编辑正向/负向并出图。",
             "3. LoRA 按底模筛选；加入后可看强度、启用/旁路。",
             "4. 生成参数留空就用工作流默认；改了只影响内置工作流。",
             "5. 失败时点错误面板里的“复制 DSH 提示词”即可排查。",
@@ -3906,9 +4058,8 @@ LoRA 目标目录：{lora_root}
                 return
         brief = self.beginner_brief.get("1.0", "end").strip()
         if not brief:
-            brief = random.choice(RANDOM_PROMPTS)
-            self.beginner_brief.delete("1.0", "end")
-            self.beginner_brief.insert("1.0", brief)
+            self._beginner_random_prompt()
+            brief = self.beginner_brief.get("1.0", "end").strip()
             self.status_var.set("已随机填入提示词，正在生成…")
         elif brief.startswith("例如："):
             brief = brief[len("例如："):].strip() or BEGINNER_DEFAULT_PROMPT
@@ -3925,7 +4076,7 @@ LoRA 目标目录：{lora_root}
         self.gen_cancel.clear()
         self.gen_stop_after.clear()
         if hasattr(self, "beginner_stop_btn"):
-            self.beginner_stop_btn.configure(state="normal", text="停止")
+            self.beginner_stop_btn.configure(state="normal", text="停止当前")
         if hasattr(self, "beginner_stop_after_btn"):
             self.beginner_stop_after_btn.configure(state="normal", text="停止后续")
         if hasattr(self, "beginner_repeat_btn"):
@@ -3994,15 +4145,68 @@ LoRA 目标目录：{lora_root}
             tk.Button(row, text=text, command=cmd, bg=COLORS["card2"], fg=COLORS["text"],
                       relief="flat", bd=0, padx=12, pady=5, cursor="hand2").pack(side="left", padx=(0, 6))
 
+    def _on_random_category_change(self, _event=None):
+        self._save_settings()
+        category = self.random_category_var.get()
+        if category == "混合":
+            self.status_var.set("随机提示词范围：全部类型")
+        else:
+            self.status_var.set(f"随机提示词范围：{category}")
+
+    def _random_prompt_style(self, text):
+        for words, style in RANDOM_PROMPT_STYLE_RULES:
+            if any(word in text for word in words):
+                return style
+        for category, texts in RANDOM_PROMPT_LIBRARY.items():
+            if text in texts:
+                return RANDOM_PROMPT_CATEGORY_STYLES.get(category, "写实")
+        return "写实"
+
+    def _base_installed(self, base):
+        return not self._missing_profile_cached(base["workflow"])
+
+    def _random_auto_base(self, style):
+        mapping = (NSFW_STYLE_BASE_RECOMMENDATIONS if self.mode.get() == "NSFW"
+                   else STYLE_BASE_RECOMMENDATIONS)
+        base_key, reason = mapping.get(style, ("illustrious", "通用默认"))
+        ideal = next((x for x in BEGINNER_BASES if x["key"] == base_key), BEGINNER_BASES[0])
+        if self._base_installed(ideal):
+            return base_key, f"{ideal['label']} · {reason}"
+        current = self._beginner_base()
+        if self._base_installed(current):
+            return current["key"], f"推荐 {ideal['label']}（未安装），保留当前 {current['label']}"
+        fallback = next((x for x in BEGINNER_BASES if self._base_installed(x)), None)
+        if fallback:
+            return fallback["key"], f"推荐 {ideal['label']}（未安装），改用已装的 {fallback['label']}"
+        return current["key"], f"推荐 {ideal['label']}（未安装）；没有可用底模，保留当前"
+
+    def _toggle_random_auto_match(self):
+        self._save_settings()
+        if self.random_auto_match_var.get():
+            self.status_var.set("随机提示词会自动匹配风格和底模")
+        else:
+            self.status_var.set("随机提示词只填文字，不切换风格和底模")
+
     def _beginner_random_prompt(self):
         current = self.beginner_brief.get("1.0", "end").strip()
-        text = random.choice(RANDOM_PROMPTS)
-        if text == current and len(RANDOM_PROMPTS) > 1:
-            text = random.choice([x for x in RANDOM_PROMPTS if x != current])
+        category = self.random_category_var.get()
+        pool = (RANDOM_PROMPTS if category == "混合"
+                else RANDOM_PROMPT_LIBRARY.get(category) or RANDOM_PROMPTS)
+        text = random.choice(pool)
+        if text == current and len(pool) > 1:
+            text = random.choice([x for x in pool if x != current])
         self.beginner_brief.delete("1.0", "end")
         self.beginner_brief.insert("1.0", text)
         self.beginner_brief.focus_set()
-        self.status_var.set("已随机填入提示词，可继续修改")
+        if self.random_auto_match_var.get():
+            style = self._random_prompt_style(text)
+            self._select_beginner_style(style)
+            base_key, base_note = self._random_auto_base(style)
+            if base_key != self.beginner_base_key:
+                self._select_beginner_base(base_key)
+            self.status_var.set(f"已随机填入，自动匹配：{style} · {base_note}")
+        else:
+            self.status_var.set("已随机填入提示词，可继续修改")
 
     def _beginner_inspire(self, kind):
         values = BEGINNER_INSPIRATION.get(kind) or []
@@ -4040,6 +4244,7 @@ LoRA 目标目录：{lora_root}
     def _stop_after(self):
         if not self.generating:
             return
+        self.task.request_stop_after()
         self.gen_stop_after.set()
         self.beginner_stop_after_btn.configure(state="disabled", text="当前张后停止")
         self.status_var.set("已请求停止后续；当前这张完成后停止")
@@ -4047,6 +4252,7 @@ LoRA 目标目录：{lora_root}
     def stop_beginner_generation(self):
         if not self.generating:
             return
+        self.task.cancel()
         self.gen_cancel.set()
         self.beginner_pending = False
         if hasattr(self, "beginner_stop_btn"):
@@ -4381,14 +4587,14 @@ LoRA 目标目录：{lora_root}
                     self.refine_entry.delete(0, "end")
                     self._add_record(brief + f"\n[微调] {instruction}", target, mode, pos, neg, notes, raw)
                     self.generating = False
-                    self.generate_btn.configure(state="normal", text="新开一个")
-                    self.refine_btn.configure(state="normal", text="继续调整")
+                    self.generate_btn.configure(state="normal", text="重新写提示词")
+                    self.refine_btn.configure(state="normal", text="改写提示词")
                     self.status_var.set("调整已合并到上方提示词 · 输入框已清空")
                 elif item[0] == "refine_error":
                     _, err, instruction = item
                     self.generating = False
-                    self.generate_btn.configure(state="normal", text="新开一个")
-                    self.refine_btn.configure(state="normal", text="继续调整")
+                    self.generate_btn.configure(state="normal", text="重新写提示词")
+                    self.refine_btn.configure(state="normal", text="改写提示词")
                     self.status_var.set("调整失败")
                     messagebox.showerror(APP_NAME, err)
                 elif item[0] == "done":
@@ -4407,13 +4613,13 @@ LoRA 目标目录：{lora_root}
                     self.refine_history = []
                     self._refresh_refine_log()
                     self.generating = False
-                    self.generate_btn.configure(state="normal", text="新开一个")
+                    self.generate_btn.configure(state="normal", text="重新写提示词")
                     self.status_var.set("生成完成 · 已保存版本")
                     if self.gen_cancel.is_set():
                         self.beginner_pending = False
                         self.gen_cancel.clear()
                         if hasattr(self, "beginner_stop_btn"):
-                            self.beginner_stop_btn.configure(state="disabled", text="停止")
+                            self.beginner_stop_btn.configure(state="disabled", text="停止当前")
                         self._beginner_set_progress("已停止；提示词已生成，但没有出图", 0, 1)
                         self.status_var.set("已停止生成")
                         return
@@ -4430,8 +4636,8 @@ LoRA 目标目录：{lora_root}
                     self.beginner_pending = False
                     self.gen_cancel.clear()
                     if hasattr(self, "beginner_stop_btn"):
-                        self.beginner_stop_btn.configure(state="disabled", text="停止")
-                    self.generate_btn.configure(state="normal", text="新开一个")
+                        self.beginner_stop_btn.configure(state="disabled", text="停止当前")
+                    self.generate_btn.configure(state="normal", text="重新写提示词")
                     if hasattr(self, "beginner_generate_btn"):
                         self.beginner_generate_btn.configure(state="normal", text="开始生成")
                         self.beginner_progress.configure(text="生成失败")
@@ -4689,6 +4895,22 @@ LoRA 目标目录：{lora_root}
         wf = self._current_workflow_info()
         count = max(1, min(8, int(self.gen_count_var.get() or 1)))
         close_after = bool(self.gen_close_var.get())
+        params = self._advanced_params()
+        width = height = None
+        if self.beginner_mode_var.get():
+            width, height = BEGINNER_RATIOS.get(self.beginner_ratio.get(), BEGINNER_RATIOS["竖图"])
+        self.task.begin(count)
+        self.current_request = core.GenerationRequest(
+            workflow_key=wf.get("key", ""), workflow_label=wf.get("label", ""),
+            positive=positive, negative=negative, loras=[dict(x) for x in self.selected_loras],
+            count=count, width=width, height=height,
+            seed=int(params.get("seed") or 0),
+            steps=params.get("steps") or None, cfg=params.get("cfg") or None,
+            sampler=str(params.get("sampler") or ""), scheduler=str(params.get("scheduler") or ""),
+            out_dir=str(self.output_dir), close_after=close_after)
+        self.diagnostics.write("gen_start", workflow=wf.get("key"), count=count,
+                               seed=params.get("seed"), mode=self.mode.get(),
+                               beginner=bool(self.beginner_mode_var.get()))
         self.generating = True
         self.gen_cancel.clear()
         self.gen_stop_after.clear()
@@ -4698,7 +4920,7 @@ LoRA 目标目录：{lora_root}
                      wf.get("label"), count, self.beginner_ratio.get() if self.beginner_mode_var.get() else "advanced",
                      bool(self.auto_pick_var.get()))
         if hasattr(self, "beginner_stop_btn"):
-            self.beginner_stop_btn.configure(state="normal", text="停止")
+            self.beginner_stop_btn.configure(state="normal", text="停止当前")
         if hasattr(self, "beginner_comfy_status"):
             self.beginner_comfy_status.configure(text="ComfyUI ✓ 出图中", fg=COLORS["green"])
         if hasattr(self, "beginner_repeat_btn"):
@@ -4713,10 +4935,6 @@ LoRA 目标目录：{lora_root}
         self.result_progressbar.configure(maximum=count, value=0)
         selected_snapshot = [dict(x) for x in self.selected_loras]
         model_id = self.model_map.get(self.model_var.get(), "")
-        width = height = None
-        if self.beginner_mode_var.get():
-            width, height = BEGINNER_RATIOS.get(self.beginner_ratio.get(), BEGINNER_RATIOS["竖图"])
-        params = self._advanced_params()
         self._save_settings()
         threading.Thread(target=self._gen_worker,
                          args=(wf, positive, negative, count, close_after, str(self.output_dir),
@@ -4837,6 +5055,7 @@ LoRA 目标目录：{lora_root}
             return
         if kind == "working":
             _, idx, count, done = msg
+            self.task.update(done, count, message=f"第 {idx} 张生成中")
             self.gen_btn.configure(text=f"出图中 · 已出 {done}/{count}")
             self.result_progress.configure(text=f"第 {idx} 张生成中 · 已出 {done}/{count}")
             self.result_progressbar.configure(maximum=count, value=done)
@@ -4849,6 +5068,7 @@ LoRA 目标目录：{lora_root}
             return
         if kind == "progress":
             _, idx, count, images, summary, plan, seed = msg
+            self.task.update(len(images), count, seed=seed, message=f"已出 {len(images)}/{count}")
             self._set_last_seed(seed)
             self._show_results(images)
             self._show_beginner_results(images)
@@ -4866,7 +5086,7 @@ LoRA 目标目录：{lora_root}
         self.generating = False
         self.gen_btn.configure(state="normal", text="生成并出图")
         if hasattr(self, "beginner_stop_btn"):
-            self.beginner_stop_btn.configure(state="disabled", text="停止")
+            self.beginner_stop_btn.configure(state="disabled", text="停止当前")
         if hasattr(self, "beginner_stop_after_btn"):
             self.beginner_stop_after_btn.configure(state="disabled", text="停止后续")
         if hasattr(self, "beginner_generate_btn"):
@@ -4875,6 +5095,9 @@ LoRA 目标目录：{lora_root}
         self.gen_cancel.clear()
         if kind == "done":
             _, images, summary, plan, seed = msg
+            self.task.finish()
+            self.diagnostics.write("gen_done", images=len(images), seed=seed,
+                                   elapsed=round(self.task.snapshot().finished_at - self.task.snapshot().started_at, 2))
             self._set_last_seed(seed)
             self._show_results(images)
             self._show_beginner_results(images)
@@ -4908,6 +5131,9 @@ LoRA 目标目录：{lora_root}
             self._beginner_set_progress("出图失败，请查看提示", 0, 1)
             self.beginner_result_hint.configure(text="出图失败")
             self.status_var.set("出图失败")
+            self.task.fail(str(msg[1]))
+            self.diagnostics.write("gen_error", error=core.classify_error(str(msg[1])).code,
+                                   message=str(msg[1])[:300])
             APP_LOG.error("出图失败: %s", msg[1])
             self._show_generation_error(str(msg[1]))
         self._schedule_env_refresh()
@@ -5261,8 +5487,8 @@ LoRA 目标目录：{lora_root}
         except Exception as e:
             messagebox.showerror(APP_NAME, str(e))
 
-    def _open_center_for_beginner_base(self):
-        base = self._beginner_base()
+    def _open_center_for_beginner_base(self, base=None):
+        base = base or self._beginner_base()
         self.open_model_center(initial_query=base["label"], initial_kind="底模")
 
     def open_model_center(self, initial_query="", initial_kind="LoRA"):
@@ -6042,15 +6268,79 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
                   fg=COLORS["muted"], relief="flat", bd=0, padx=10, pady=5,
                   cursor="hand2").pack(side="right")
 
+    def _show_text_document(self, title, path):
+        top = tk.Toplevel(self.root)
+        top.title(title)
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 900, 700)
+        top.transient(self.root)
+        tk.Label(top, text=title, bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=18, pady=(14, 4))
+        box = ScrolledText(top, wrap="word", bg=COLORS["panel"], fg=COLORS["text"],
+                           relief="flat", bd=0, font=("Microsoft YaHei UI", 10), padx=14, pady=12)
+        box.pack(fill="both", expand=True, padx=18, pady=(0, 8))
+        try:
+            box.insert("1.0", Path(path).read_text(encoding="utf-8"))
+        except Exception as e:
+            box.insert("1.0", f"读取失败：{e}\n\n路径：{path}")
+        box.configure(state="disabled")
+        row = tk.Frame(top, bg=COLORS["bg"])
+        row.pack(fill="x", padx=18, pady=(0, 12))
+        tk.Button(row, text="关闭", command=top.destroy, bg=COLORS["card2"],
+                  fg=COLORS["text"], relief="flat", bd=0, padx=14, pady=5,
+                  cursor="hand2").pack(side="right")
+
+    def _document_candidates(self, name):
+        return [EXTERNAL_DIR / name, APP_DIR / name,
+                Path.cwd() / name, Path(__file__).resolve().parent / name]
+
+    def open_shortcuts(self):
+        top = tk.Toplevel(self.root)
+        top.title("快捷键")
+        top.configure(bg=COLORS["bg"])
+        center_dialog_over(self.root, top, 560, 390)
+        top.transient(self.root)
+        tk.Label(top, text="快捷键", bg=COLORS["bg"], fg=COLORS["text"],
+                 font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=20, pady=(14, 4))
+        tk.Label(top, text="鼠标放在主界面时也可使用；Ctrl+Enter 在简洁/高级模式都会开始出图。",
+                 bg=COLORS["bg"], fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(
+                     anchor="w", padx=20, pady=(0, 10))
+        rows = [
+            ("Ctrl+Enter", "开始生成图片"),
+            ("Ctrl+S", "保存版本"),
+            ("Ctrl+L", "聚焦提示词"),
+            ("Ctrl+F", "搜索工作流"),
+            ("Ctrl+Z", "撤销清空"),
+            ("Ctrl+Q", "退出程序"),
+        ]
+        grid = tk.Frame(top, bg=COLORS["bg"])
+        grid.pack(fill="both", expand=True, padx=20)
+        for r, (key, desc) in enumerate(rows):
+            tk.Label(grid, text=key, bg=COLORS["panel"], fg=COLORS["accent2"],
+                     font=("Consolas", 10, "bold"), padx=8, pady=5, anchor="w").grid(
+                         row=r, column=0, sticky="ew", pady=2)
+            tk.Label(grid, text=desc, bg=COLORS["panel"], fg=COLORS["text"],
+                     font=("Microsoft YaHei UI", 9), padx=10, pady=5, anchor="w").grid(
+                         row=r, column=1, sticky="ew", pady=2)
+        grid.grid_columnconfigure(0, weight=1)
+        grid.grid_columnconfigure(1, weight=3)
+        tk.Button(top, text="关闭", command=top.destroy, bg=COLORS["card2"],
+                  fg=COLORS["text"], relief="flat", bd=0, padx=14, pady=5,
+                  cursor="hand2").pack(anchor="e", padx=20, pady=10)
+
+    def open_user_guide(self):
+        path = next((p for p in self._document_candidates("使用说明.md") if p.exists()), None)
+        if path is None:
+            messagebox.showinfo(APP_NAME, "当前构建没有附带使用说明。")
+            return
+        self._show_text_document("使用说明", path)
+
     def open_changelog(self):
-        path = APP_DIR / "CHANGELOG.md"
-        if not path.exists():
+        path = next((p for p in self._document_candidates("CHANGELOG.md") if p.exists()), None)
+        if path is None:
             messagebox.showinfo(APP_NAME, "当前构建没有附带更新日志。")
             return
-        try:
-            os.startfile(str(path))
-        except Exception as e:
-            messagebox.showerror(APP_NAME, str(e))
+        self._show_text_document("更新日志", path)
 
     def check_updates(self):
         if getattr(self, "_update_checking", False):
@@ -6170,9 +6460,19 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         form.bind("<Configure>", lambda e: form_canvas.configure(scrollregion=form_canvas.bbox("all")))
         form_canvas.bind("<Configure>", lambda e: form_canvas.itemconfigure(form_window, width=e.width))
         vars_ = {}
+        tabs = ttk.Notebook(form)
+        tabs.pack(fill="both", expand=True, padx=4, pady=4)
+        env_tab = tk.Frame(tabs, bg=COLORS["panel"])
+        behavior_tab = tk.Frame(tabs, bg=COLORS["panel"])
+        update_tab = tk.Frame(tabs, bg=COLORS["panel"])
+        guide_tab = tk.Frame(tabs, bg=COLORS["panel"])
+        tabs.add(env_tab, text="环境与路径")
+        tabs.add(behavior_tab, text="生成行为")
+        tabs.add(update_tab, text="更新")
+        tabs.add(guide_tab, text="引导")
 
-        def row(key, label, browse=None, width=44, secret=False):
-            r = tk.Frame(form, bg=COLORS["panel"])
+        def row(key, label, browse=None, width=44, secret=False, parent=None):
+            r = tk.Frame(parent or env_tab, bg=COLORS["panel"])
             r.pack(fill="x", padx=12, pady=4)
             tk.Label(r, text=label, width=13, anchor="w", bg=COLORS["panel"],
                      fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
@@ -6203,7 +6503,7 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         row("lora_roots", "LoRA 根目录（; 分隔）", "dir")
         row("checkpoint_dir", "底模下载目录", "dir")
         row("civitai_api_key", "Civitai API Key", secret=True)
-        row("update_manifest_url", "更新清单地址")
+        row("update_manifest_url", "更新清单地址", parent=update_tab)
         row("output_dir", "输出目录", "dir")
         row("skills_dir", "提示词 skills 目录", "dir")
         row("prompt_library_dir", "提示词库目录", "dir")
@@ -6211,9 +6511,9 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         row("comfy_close_script", "ComfyUI 关闭脚本", "file")
         row("comfy_workflows_dir", "工作流目录", "dir")
         row("tool80_path", "8.0 精修 HTML（可选）", "file")
-        row("ui_scale", "界面缩放（重启生效）", width=8)
+        row("ui_scale", "界面缩放（重启生效）", width=8, parent=behavior_tab)
 
-        behavior = tk.Frame(form, bg=COLORS["panel"])
+        behavior = tk.Frame(behavior_tab, bg=COLORS["panel"])
         behavior.pack(fill="x", padx=12, pady=(10, 4))
         tk.Label(behavior, text="关闭窗口时", width=13, anchor="w", bg=COLORS["panel"],
                  fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
@@ -6225,7 +6525,7 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
                  bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 9)).pack(side="left")
 
-        idle = tk.Frame(form, bg=COLORS["panel"])
+        idle = tk.Frame(behavior_tab, bg=COLORS["panel"])
         idle.pack(fill="x", padx=12, pady=(0, 4))
         tk.Label(idle, text="空闲卸载 LLM", width=13, anchor="w", bg=COLORS["panel"],
                  fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
@@ -6239,7 +6539,7 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
                  bg=COLORS["panel"], fg=COLORS["muted"],
                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
 
-        guides = tk.Frame(form, bg=COLORS["panel"])
+        guides = tk.Frame(guide_tab, bg=COLORS["panel"])
         guides.pack(fill="x", padx=12, pady=(8, 4))
         tk.Label(guides, text="引导", width=13, anchor="w", bg=COLORS["panel"],
                  fg=COLORS["muted"], font=("Microsoft YaHei UI", 9)).pack(side="left")
@@ -6453,26 +6753,84 @@ LoRA 根目录：{'; '.join(str(x) for x in CFG.paths('lora_roots')) or '未配�
         except Exception as e:
             messagebox.showerror(APP_NAME, str(e))
 
+    def _shortcut_generate_images(self):
+        if self.generating:
+            return "break"
+        try:
+            if self.beginner_mode_var.get():
+                self.beginner_generate()
+            else:
+                self.generate_images()
+        except Exception as e:
+            APP_LOG.warning("Ctrl+Enter 触发出图失败: %s", e)
+        return "break"
+
+    def _focus_prompt_editor(self):
+        try:
+            if self.beginner_mode_var.get():
+                self.beginner_brief.focus_set()
+            else:
+                self.positive_text.focus_set()
+        except Exception:
+            pass
+        return "break"
+
+    def _focus_workflow_search(self):
+        try:
+            self.workflow_search_entry.focus_set()
+            self.workflow_search_entry.select_range(0, "end")
+        except Exception:
+            pass
+        return "break"
+
+    def _undo_clear(self):
+        if not self._prompt_undo:
+            return "break"
+        brief, pos, neg, refine = self._prompt_undo
+        self.beginner_brief.delete("1.0", "end")
+        self.beginner_brief.insert("1.0", brief)
+        self.positive_text.delete("1.0", "end")
+        self.positive_text.insert("1.0", pos)
+        self.negative_text.delete("1.0", "end")
+        self.negative_text.insert("1.0", neg)
+        self.refine_entry.delete(0, "end")
+        self.refine_entry.insert(0, refine)
+        self._prompt_undo = None
+        self._update_prompt_counts()
+        self.status_var.set("已撤销清空")
+        return "break"
+
     def clear(self):
+        self._prompt_undo = (
+            self.beginner_brief.get("1.0", "end").strip(),
+            self.positive_text.get("1.0", "end").strip(),
+            self.negative_text.get("1.0", "end").strip(),
+            self.refine_entry.get().strip(),
+        )
         self.brief_text.delete("1.0", "end")
+        self.beginner_brief.delete("1.0", "end")
         self.positive_text.delete("1.0", "end")
         self.negative_text.delete("1.0", "end")
         self.refine_history = []
         self._refresh_refine_log()
         self.refine_entry.delete(0, "end")
-        self.status_var.set("已清空")
+        self._update_prompt_counts()
+        self.status_var.set("已清空；按 Ctrl+Z 可撤销")
 
     def _show_generation_error(self, raw):
+        info = core.classify_error(raw)
         friendly = humanize_error(raw)
         top = tk.Toplevel(self.root)
-        top.title("出图失败 · 排错")
+        top.title(f"{info.title} · 排错")
         top.configure(bg=COLORS["bg"])
         center_dialog_over(self.root, top, 760, 460)
         top.transient(self.root)
-        tk.Label(top, text="出图失败", bg=COLORS["bg"], fg=COLORS["red"],
-                 font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=20, pady=(16, 4))
-        tk.Label(top, text=friendly, bg=COLORS["bg"], fg=COLORS["text"], justify="left",
-                 wraplength=700, font=("Microsoft YaHei UI", 10)).pack(anchor="w", padx=20, pady=(0, 8))
+        tk.Label(top, text=info.title, bg=COLORS["bg"], fg=COLORS["red"],
+                 font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=20, pady=(16, 2))
+        tk.Label(top, text=info.hint, bg=COLORS["bg"], fg=COLORS["text"], justify="left",
+                 wraplength=700, font=("Microsoft YaHei UI", 10)).pack(anchor="w", padx=20, pady=(0, 4))
+        tk.Label(top, text=friendly, bg=COLORS["bg"], fg=COLORS["muted"], justify="left",
+                 wraplength=700, font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=20, pady=(0, 8))
         detail = tk.Text(top, height=8, bg=COLORS["input"], fg=COLORS["muted"], relief="flat",
                          bd=0, wrap="word", font=("Consolas", 9))
         detail.pack(fill="both", expand=True, padx=20, pady=(0, 8))
@@ -6613,4 +6971,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
 

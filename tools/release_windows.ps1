@@ -16,7 +16,7 @@ if (-not $SkipBuild) {
   if ($LASTEXITCODE -ne 0) { throw "PyInstaller 失败" }
 }
 $dist = Join-Path $root 'dist-release\PromptWorkbench'
-Copy-Item (Join-Path $root 'README.md'),(Join-Path $root 'LICENSE'),(Join-Path $root 'THIRD_PARTY_NOTICES.md'),(Join-Path $root 'CHANGELOG.md'),(Join-Path $root 'VERSION') -Destination $dist -Force
+Copy-Item (Join-Path $root 'README.md'),(Join-Path $root 'LICENSE'),(Join-Path $root 'THIRD_PARTY_NOTICES.md'),(Join-Path $root 'CHANGELOG.md'),(Join-Path $root '使用说明.md'),(Join-Path $root 'VERSION') -Destination $dist -Force
 & (Join-Path $PSScriptRoot 'sign_windows.ps1') -Exe (Join-Path $dist 'PromptWorkbench.exe')
 $zip = Join-Path $root "dist-release\local-image-workbench-$Version-portable.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
@@ -25,3 +25,4 @@ $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
 "$hash  $(Split-Path $zip -Leaf)" | Set-Content (Join-Path $root 'dist-release\SHA256SUMS.txt') -Encoding UTF8
 Write-Host "ZIP=$zip"
 Write-Host "SHA256=$hash"
+
