@@ -2417,7 +2417,10 @@ class PromptWorkbench:
                     comfy_ok = r.status < 500
                     comfy_text = "ComfyUI ✓" if comfy_ok else f"ComfyUI HTTP {r.status}"
             except Exception:
-                comfy_text = "ComfyUI ✕ 未启动"
+                if self.gen_close_var.get():
+                    comfy_text = "ComfyUI ○ 按需启动"
+                else:
+                    comfy_text = "ComfyUI ✕ 未启动"
             self.env_queue.put((llm_text, llm_ok, comfy_text, comfy_ok))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -2432,8 +2435,9 @@ class PromptWorkbench:
         self._env_check_running = False
         self.beginner_llm_status.configure(text=llm_text,
                                            fg=COLORS["green"] if llm_ok else COLORS["red"])
-        self.beginner_comfy_status.configure(text=comfy_text,
-                                             fg=COLORS["green"] if comfy_ok else COLORS["red"])
+        comfy_fg = COLORS["green"] if comfy_ok else (
+            COLORS["muted"] if "按需启动" in comfy_text else COLORS["red"])
+        self.beginner_comfy_status.configure(text=comfy_text, fg=comfy_fg)
         self.beginner_prepare_btn.configure(state="normal", text="一键准备")
         self._refresh_beginner_model_status()
         APP_LOG.info("环境状态: %s / %s", llm_text, comfy_text)
@@ -2466,7 +2470,10 @@ class PromptWorkbench:
                     comfy_ok = r.status < 500
                     comfy_text = "ComfyUI ✓" if comfy_ok else f"ComfyUI HTTP {r.status}"
             except Exception:
-                comfy_text = "ComfyUI ✕ " + (comfy_error[:50] if comfy_error else "未启动")
+                if self.gen_close_var.get():
+                    comfy_text = "ComfyUI ○ 按需启动"
+                else:
+                    comfy_text = "ComfyUI ✕ " + (comfy_error[:50] if comfy_error else "未启动")
             self.env_queue.put((llm_text, llm_ok, comfy_text, comfy_ok))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -3381,8 +3388,10 @@ LoRA 目标目录：{lora_root}
                 return
         brief = self.beginner_brief.get("1.0", "end").strip()
         if not brief or brief.startswith("例如："):
-            messagebox.showwarning(APP_NAME, "先写一句你想要的画面。")
-            return
+            brief = "银发成年女性，雨夜霓虹街头，黑色风衣，温柔地看着镜头，电影感"
+            self.beginner_brief.delete("1.0", "end")
+            self.beginner_brief.insert("1.0", brief)
+            self.status_var.set("已填入示例画面，正在生成…")
         style = self.beginner_style.get()
         if style and style != "无风格":
             brief += f"\n画面风格：{style}"
